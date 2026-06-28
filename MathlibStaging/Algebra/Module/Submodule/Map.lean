@@ -21,7 +21,7 @@ variable {R R₂ M M₂ : Type*}
 
 /-- Comap commutes with infima of submodules. This generalizes `Submodule.comap_iInf` to
 arbitrary semilinear maps, dropping the `RingHomSurjective` assumption. -/
-@[simp]
+@[simp, overrides comap_iInf "drops the `RingHomSurjective σ₁₂` assumption"]
 theorem comap_iInf' {ι : Sort*} (f : M →ₛₗ[σ₁₂] M₂) (p : ι → Submodule R₂ M₂) :
     comap f (⨅ i, p i) = ⨅ i, comap f (p i) := by
   ext
