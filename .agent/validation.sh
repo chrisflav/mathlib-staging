@@ -16,3 +16,6 @@ lake exe cache get
 
 # Verify everything builds (the staging syntax linters run during the build).
 lake build --wfail || exit 1
+
+# Run mathlib's environment linters on the staging library.
+lake lint || exit 1

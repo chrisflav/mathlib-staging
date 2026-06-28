@@ -58,7 +58,12 @@ def heartbeatsLinter : Linter where
         if name.components.contains `maxHeartbeats then
           Linter.logLint linter.staging.heartbeats opt
             m!"Modifying `{name}` is not allowed in the staging library; \
-              proofs are expected to work within the default heartbeat budget."
+              proofs are expected to work within the default heartbeat budget.\n\
+              Speed the proof up instead of raising the budget: split the declaration into \
+              smaller pieces (e.g. factor a slow sub-proof into its own lemma, or abstract over \
+              an expensive datum so it is unfolded only once), simplify the goal before the costly \
+              step, or pass explicit arguments to avoid expensive unification. \
+              `set_option trace.profiler true` and `count_heartbeats` help locate the hot spot."
 
 initialize addLinter heartbeatsLinter
 
@@ -79,6 +84,24 @@ def bannedAtom? (stx : Syntax) : Option String :=
     | _ => none
   else none
 
+/-- The warning message for a banned tactic, with guidance tailored to `keyword`. -/
+def bannedTacticMessage : String → MessageData
+  | "erw" =>
+    m!"The `erw` tactic is not allowed in the staging library.\n\
+      Run `erw?` to see which rewrite needed reducible unfolding, then make that term match the \
+      lemma syntactically so a plain `rw` (or `simp only`) applies: rewrite or simplify with a \
+      suitable API lemma first, adding a new API lemma if a fitting one is missing. This keeps the \
+      proof from silently relying on reducible defeq."
+  | "change" =>
+    m!"The `change` tactic is not allowed in the staging library.\n\
+      Remove the definitional step instead: rewrite or simplify with a suitable API lemma (adding \
+      one if needed) so the goal already has the wanted form, or drop the `change` entirely if the \
+      next tactic accepts the defeq goal.\n\
+      Do not replace it with `show`: `show` performs the same goal change, so it is pointless here \
+      (and is itself flagged by mathlib's `show` linter)."
+  | keyword =>
+    m!"The `{keyword}` tactic is not allowed in the staging library."
+
 @[inherit_doc linter.staging.bannedTactics]
 def bannedTacticsLinter : Linter where
   run := withSetOptionIn fun stx => do
@@ -86,8 +109,7 @@ def bannedTacticsLinter : Linter where
     if (← get).messages.hasErrors then return
     for node in collectMatching (bannedAtom? · |>.isSome) stx do
       if let some keyword := bannedAtom? node then
-        Linter.logLint linter.staging.bannedTactics node
-          m!"The `{keyword}` tactic is not allowed in the staging library."
+        Linter.logLint linter.staging.bannedTactics node (bannedTacticMessage keyword)
 
 initialize addLinter bannedTacticsLinter
 
