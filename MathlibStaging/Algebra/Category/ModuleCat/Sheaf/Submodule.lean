@@ -71,6 +71,9 @@ noncomputable def toSheafOfModules : SheafOfModules.{v} R where
 noncomputable def ι : N.toSheafOfModules ⟶ P :=
   ⟨N.toSubmodule.ι⟩
 
+@[simp]
+lemma ι_val : N.ι.val = N.toSubmodule.ι := rfl
+
 instance : Mono N.ι := by
   have : Mono ((forget R).map N.ι) := inferInstanceAs (Mono N.toSubmodule.ι)
   exact (forget R).mono_of_mono_map this
