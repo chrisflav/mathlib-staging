@@ -1,6 +1,8 @@
-import Lean.Elab.Command
-import Lean.Parser.Command
-import Lean.Linter.Basic
+module
+
+public meta import Lean.Elab.Command
+public meta import Lean.Parser.Command
+public meta import Lean.Linter.Basic
 
 /-!
 # Staging syntax linters
@@ -14,6 +16,8 @@ run on every mirror file.
 * `linter.staging.bannedTactics` forbids the `change` and `erw` tactics.
 * `linter.staging.proofLength` limits a proof to a number of non-comment lines.
 -/
+
+meta section
 
 open Lean Elab Command Linter
 
@@ -30,7 +34,7 @@ partial def collectMatching (p : Syntax → Bool) (stx : Syntax) : Array Syntax 
 /-- The `heartbeats` linter forbids any `set_option maxHeartbeats …`, whether at
 file scope or scoped to a declaration with `in`. Proofs in the staging library
 are expected to work within the default heartbeat budget. -/
-register_option linter.staging.heartbeats : Bool := {
+public register_option linter.staging.heartbeats : Bool := {
   defValue := true
   descr := "enable the staging linter forbidding `maxHeartbeats` changes"
 }
@@ -61,7 +65,7 @@ initialize addLinter heartbeatsLinter
 /-! ## The `bannedTactics` linter -/
 
 /-- The `bannedTactics` linter forbids the `change` and `erw` tactics. -/
-register_option linter.staging.bannedTactics : Bool := {
+public register_option linter.staging.bannedTactics : Bool := {
   defValue := true
   descr := "enable the staging linter forbidding the `change` and `erw` tactics"
 }
@@ -92,13 +96,13 @@ initialize addLinter bannedTacticsLinter
 /-- The `proofLength` linter limits the body of a `theorem`/`lemma`/`example`
 (everything from `:=` onwards, comments excluded) to `linter.staging.proofLengthLimit`
 lines. -/
-register_option linter.staging.proofLength : Bool := {
+public register_option linter.staging.proofLength : Bool := {
   defValue := true
   descr := "enable the staging linter limiting proof length"
 }
 
 /-- The maximum number of non-comment lines allowed in a proof body. -/
-register_option linter.staging.proofLengthLimit : Nat := {
+public register_option linter.staging.proofLengthLimit : Nat := {
   defValue := 100
   descr := "the maximum number of non-comment lines allowed in a proof"
 }

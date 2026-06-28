@@ -1,4 +1,6 @@
-import MathlibStaging.Linter.Staging
+module
+
+public import MathlibStaging.Linter.Staging
 
 /-!
 # `MathlibStaging.Init`
