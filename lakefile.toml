@@ -1,0 +1,34 @@
+name = "mathlib-staging"
+version = "0.1.0"
+keywords = ["math"]
+defaultTargets = ["MathlibStaging"]
+
+# Run mathlib's environment linters with `lake lint`.
+lintDriver = "batteries/runLinter"
+lintDriverArgs = ["MathlibStaging"]
+
+[leanOptions]
+pp.unicode.fun = true # pretty-prints `fun a ↦ b`
+autoImplicit = false
+relaxedAutoImplicit = false
+maxSynthPendingDepth = 3
+# Enable mathlib's syntax/style linters on the staging library, mirroring the
+# set that mathlib enforces on itself (see mathlib's `lakefile.lean`).
+weak.linter.mathlibStandardSet = true
+weak.linter.style.header = true
+weak.linter.style.longFile = 1500
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+rev = "v4.31.0"
+
+[[lean_lib]]
+name = "MathlibStaging"
+
+# The staging-specific import linter (see `MirrorImports.lean`). It is a
+# standalone executable rather than a syntax linter because the import policy it
+# enforces forbids mirror files from importing any staging-side module.
+[[lean_exe]]
+name = "mirror_imports"
+root = "MirrorImports"

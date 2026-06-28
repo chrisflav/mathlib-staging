@@ -1,0 +1,29 @@
+name: Lean Action CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read # Read access to repository contents
+  pages: write # Write access to GitHub Pages
+  id-token: write # Write access to ID tokens
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: leanprover/lean-action@v1
+      # Enforce the staging import policy and the `MathlibStaging.Init`
+      # requirement (see `MirrorImports.lean`). The staging syntax linters
+      # (proof length, `maxHeartbeats`, `change`/`erw`) run during `lake build`.
+      - name: Check mirror imports
+        run: lake exe mirror_imports
+      # Run mathlib's environment linters on the staging library.
+      - name: Run environment linters
+        run: lake lint
+      - uses: leanprover-community/docgen-action@v1
