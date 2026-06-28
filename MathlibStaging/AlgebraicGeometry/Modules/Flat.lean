@@ -55,9 +55,12 @@ namespace Scheme.Modules
 /-! ### Flatness of a sheaf of modules -/
 
 /-- The canonical module structure of the local ring `𝒪_{X, x}` (the stalk of the structure
-sheaf at `x`) on the stalk `F_x` of an `𝒪_X`-module `F`. -/
-@[reducible]
-def stalkModule {X : Scheme.{u}} (F : X.Modules) (x : X) :
+sheaf at `x`) on the stalk `F_x` of an `𝒪_X`-module `F`.
+
+We pin the `PresheafOfModules`-instance explicitly rather than via `inferInstance`: `Stalk.lean`
+registers two definitionally-equal `Module (X.presheaf.stalk x) _` instances, and the downstream
+germ-level rewrites (e.g. via `PresheafOfModules.germ_smul`) only match against this one. -/
+abbrev stalkModule {X : Scheme.{u}} (F : X.Modules) (x : X) :
     Module (X.presheaf.stalk x) (F.presheaf.stalk x) :=
   PresheafOfModules.instModuleCarrierStalkCommRingCatCarrierAbPresheafOpensCarrier
     (R := X.presheaf) F.val x
@@ -95,15 +98,20 @@ instance instAlgebraStalk (x : PrimeSpectrum.Top R) :
     Algebra R ((Spec R).presheaf.stalk x) :=
   StructureSheaf.stalkAlgebra R x
 
+/-- The local ring `𝒪_{Spec R, x}` is the localization of `R` at the prime `x`. -/
 instance instIsLocalizationStalk (x : PrimeSpectrum.Top R) :
     IsLocalization.AtPrime ((Spec R).presheaf.stalk x) x.asIdeal :=
   StructureSheaf.IsLocalization.to_stalk R x
 
-/-- The stalk `(M^~)_x` is a module over the local ring `𝒪_{Spec R, x}`. -/
+/-- The stalk `(M^~)_x` is a module over the local ring `𝒪_{Spec R, x}`. This re-exposes the
+canonical `PresheafOfModules`-instance: typeclass search does not otherwise find it through the
+`SheafOfModules.presheaf` projection, so the downstream `IsScalarTower`/flatness statements rely on
+it being registered here. -/
 instance instModuleStalk (x : PrimeSpectrum.Top R) :
     Module ((Spec R).presheaf.stalk x) ((tilde M).presheaf.stalk x) :=
   Scheme.Modules.stalkModule (tilde M) x
 
+/-- The actions of `R` and the local ring `𝒪_{Spec R, x}` on the stalk `(M^~)_x` are compatible. -/
 instance instScalarTowerStalk (x : PrimeSpectrum.Top R) :
     IsScalarTower R ((Spec R).presheaf.stalk x) ((tilde M).presheaf.stalk x) :=
   IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
@@ -117,6 +125,13 @@ namespace Scheme.Modules
 We relate `Flat` to flat morphisms of schemes (`AlgebraicGeometry.Flat`), proving that flatness is
 transitive along a flat base change and that flatness is local on the base. -/
 
+/-- The underlying ring homomorphism of the stalk map of a composition factors as the composition
+of the underlying ring homomorphisms of the stalk maps. -/
+lemma stalkMap_comp_hom {X Y Z : Scheme.{u}} (f : X ⟶ Y) (g : Y ⟶ Z) (x : X) :
+    ((f ≫ g).stalkMap x).hom = (f.stalkMap x).hom.comp (g.stalkMap (f.base x)).hom := by
+  rw [Scheme.Hom.stalkMap_comp]
+  rfl
+
 /-- **Transitivity along a flat base.** If a sheaf of modules `F` on `X` is flat over `Y` via
 `f : X ⟶ Y`, and `g : Y ⟶ Z` is a flat morphism of schemes, then `F` is flat over `Z` via the
 composite `f ≫ g`. -/
@@ -127,10 +142,7 @@ theorem Flat.comp {X Y Z : Scheme.{u}} (f : X ⟶ Y) (g : Y ⟶ Z) (F : X.Module
   letI := stalkModule F x
   letI : Module (Y.presheaf.stalk (f.base x)) (F.presheaf.stalk x) :=
     Module.compHom (F.presheaf.stalk x) (f.stalkMap x).hom
-  have hmap : ((f ≫ g).stalkMap x).hom
-      = (f.stalkMap x).hom.comp (g.stalkMap (f.base x)).hom := by
-    rw [Scheme.Hom.stalkMap_comp]; rfl
-  rw [congrArg (Module.compHom (F.presheaf.stalk x)) hmap]
+  rw [congrArg (Module.compHom (F.presheaf.stalk x)) (stalkMap_comp_hom f g x)]
   exact Module.Flat.trans_compHom (g.stalkMap (f.base x)).hom
     (AlgebraicGeometry.Flat.stalkMap g (f.base x)) (hf.flatAt x)
 
@@ -148,10 +160,7 @@ theorem flat_comp_isOpenImmersion_iff {X V S : Scheme.{u}} (g : X ⟶ V) (j : V 
     letI := stalkModule F x
     letI : Module (V.presheaf.stalk (g.base x)) (F.presheaf.stalk x) :=
       Module.compHom (F.presheaf.stalk x) (g.stalkMap x).hom
-    have hmap : ((g ≫ j).stalkMap x).hom
-        = (g.stalkMap x).hom.comp (j.stalkMap (g.base x)).hom := by
-      rw [Scheme.Hom.stalkMap_comp]; rfl
-    have hcompHom := congrArg (Module.compHom (F.presheaf.stalk x)) hmap
+    have hcompHom := congrArg (Module.compHom (F.presheaf.stalk x)) (stalkMap_comp_hom g j x)
   · have hx := h.flatAt x
     simp only [FlatAt] at hx
     rw [hcompHom] at hx
@@ -179,7 +188,7 @@ theorem flatAt_tilde_algebra_iff {R S : CommRingCat.{u}} (f : R ⟶ S) (M : Modu
       Module.Flat R (LocalizedModule x.asIdeal.primeCompl M) := by
   letI := f.hom.toAlgebra
   letI : Module R M := Module.compHom M f.hom
-  haveI : IsScalarTower R S M := IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
+  have : IsScalarTower R S M := IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
   letI : Module ((Spec R).presheaf.stalk ((Spec.map f).base x)) ((tilde M).presheaf.stalk x) :=
     Module.compHom ((tilde M).presheaf.stalk x) ((Spec.map f).stalkMap x).hom
   letI : Module R ((tilde M).presheaf.stalk x) :=
@@ -188,9 +197,9 @@ theorem flatAt_tilde_algebra_iff {R S : CommRingCat.{u}} (f : R ⟶ S) (M : Modu
         (algebraMap R ((Spec R).presheaf.stalk ((Spec.map f).base x)) r)
       = algebraMap S ((Spec S).presheaf.stalk x) (f.hom r) := fun r ↦
     AlgebraicGeometry.stalkMap_toStalk_apply f x r
-  haveI : IsScalarTower R S ((tilde M).presheaf.stalk x) :=
+  have : IsScalarTower R S ((tilde M).presheaf.stalk x) :=
     IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
-  haveI : IsScalarTower R ((Spec R).presheaf.stalk ((Spec.map f).base x))
+  have : IsScalarTower R ((Spec R).presheaf.stalk ((Spec.map f).base x))
       ((tilde M).presheaf.stalk x) := by
     refine IsScalarTower.of_algebraMap_smul fun r n ↦ ?_
     rw [Module.compHom_smul, hsquare r, Module.compHom_smul, algebraMap_smul]
@@ -210,7 +219,7 @@ theorem flat_tilde_iff_of_algebra {R S : CommRingCat.{u}} (f : R ⟶ S) (M : Mod
     Flat (Spec.map f) (tilde M) ↔ Module.Flat R M := by
   letI := f.hom.toAlgebra
   letI : Module R M := Module.compHom M f.hom
-  haveI : IsScalarTower R S M := IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
+  have : IsScalarTower R S M := IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
   rw [flat_iff_forall_flatAt,
     Module.flat_iff_forall_localizedModule_prime_of_algebra (R := R) (S := S) (M := M)]
   refine ⟨fun h q _ ↦ (flatAt_tilde_algebra_iff f M ⟨q, ‹_›⟩).mp (h ⟨q, ‹_›⟩),
@@ -231,6 +240,9 @@ We show that flatness can be checked on the members of an open cover of the sour
 cover `{Uᵢ}` of `X`, the module `F` is flat over `S` (via `f : X ⟶ S`) iff each restriction
 `F|_{Uᵢ}` is flat over `S` (via `Uᵢ ⟶ X ⟶ S`). -/
 
+-- The `rw`s below rewrite scalar actions on stalks whose module instance enters the goal as a
+-- `letI`-bound local instance, while `PresheafOfModules.germ_smul` phrases the action through the
+-- canonical instance. These are defeq but not syntactically equal, so `rw` needs the relaxed defeq.
 set_option backward.defeqAttrib.useBackward true in
 set_option backward.isDefEq.respectTransparency false in
 /-- The additive isomorphism `(F.restrict ι)_u ≅ F_{ι u}` coming from `restrictStalkNatIso` is
@@ -270,15 +282,13 @@ theorem restrictStalkNatIso_hom_smul {U X : Scheme.{u}} (ι : U ⟶ X) [IsOpenIm
       Φ ((F.restrict ι).presheaf.germ A u h z)
         = F.presheaf.germ (ι ''ᵁ A) (ι.base u) ⟨u, h, rfl⟩ z := by
     intro A h z
-    have e1 : Φ ((F.restrict ι).presheaf.germ A u h z)
-        = ((F.restrict ι).presheaf.germ A u h
-            ≫ (Scheme.Modules.restrictStalkNatIso ι u).hom.app F) z := rfl
-    rw [e1]
     exact DFunLike.congr_fun (congrArg ConcreteCategory.hom
       (Scheme.Modules.germ_restrictStalkNatIso_hom_app ι u F h)) z
   rw [hΦ, hΦ, Scheme.Modules.restrict_map]
   -- align the `𝒪_X`-germ of `t` over `ι ''ᵁ W'` and combine the `F`-side action
-  have hsub : ι ''ᵁ W' ≤ V := by rintro _ ⟨p, hp, rfl⟩; exact hp.2
+  have hsub : ι ''ᵁ W' ≤ V := by
+    rintro _ ⟨p, hp, rfl⟩
+    exact hp.2
   rw [← TopCat.Presheaf.germ_res_apply X.presheaf (homOfLE hsub : ι ''ᵁ W' ⟶ V) (ι.base u)
         ⟨u, huW', rfl⟩ t]
   have lemR : X.presheaf.germ (ι ''ᵁ W') (ι.base u) ⟨u, huW', rfl⟩
@@ -298,7 +308,8 @@ theorem restrictStalkNatIso_hom_smul {U X : Scheme.{u}} (ι : U ⟶ X) [IsOpenIm
           ≫ (ι.appIso W').inv = X.presheaf.map (homOfLE hsub).op := by
       rw [Scheme.Hom.appIso_inv_naturality, Scheme.Hom.app_appIso_inv_assoc, ← Functor.map_comp]
       rfl
-    rw [← F2mor]; rfl
+    rw [← F2mor]
+    rfl
   -- conclude: both germs are of the same section of `F`, using the scalar identity `F2`
   refine Eq.trans (congrArg _ ?_) lemR.symm
   exact congrArg
@@ -328,7 +339,8 @@ theorem flatAt_restrict_iff {U X S : Scheme.{u}} (ι : U ⟶ X) [IsOpenImmersion
       intro b m
       have hb : ((ι ≫ f).stalkMap u).hom b
           = (ι.stalkMap u).hom ((f.stalkMap (ι.base u)).hom b) := by
-        rw [Scheme.Hom.stalkMap_comp]; rfl
+        rw [stalkMap_comp_hom ι f u]
+        rfl
       have key := restrictStalkNatIso_hom_smul ι F u ((f.stalkMap (ι.base u)).hom b) m
       rw [← hb] at key
       exact key)

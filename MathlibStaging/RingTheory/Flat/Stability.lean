@@ -19,17 +19,20 @@ namespace Module.Flat
 
 section TensorTower
 
-/-- **Flatness of a tensor product over a tower.** If `A` is a flat `S`-algebra and `M` is a flat
-`R`-module (where `R → S → A` is a tower), then `A ⊗[S] M` is a flat `R`-module. -/
+/-- **Flatness of a tensor product over a tower.** If `A` is a flat `S`-module and `M` is a flat
+`R`-module (where `R → S` is an algebra and `A`, `M` carry compatible scalar towers), then
+`A ⊗[S] M` is a flat `R`-module. -/
 theorem tensor_tower {R S : Type*} [CommRing R] [CommRing S] [Algebra R S]
-    (A : Type*) [CommRing A] [Algebra S A] [Algebra R A] [IsScalarTower R S A] [Flat S A]
+    (A : Type*) [AddCommGroup A] [Module S A] [Module R A] [IsScalarTower R S A] [Flat S A]
     (M : Type*) [AddCommGroup M] [Module R M] [Module S M] [IsScalarTower R S M] [Flat R M] :
     Flat R (A ⊗[S] M) := by
   rw [iff_lTensor_preserves_injective_linearMap]
   intro N N' _ _ _ _ f hf
   let g : M ⊗[R] N →ₗ[S] M ⊗[R] N' := TensorProduct.AlgebraTensorModule.lTensor S M f
   have hg : Function.Injective g := by
-    have hcoe : (g : M ⊗[R] N → M ⊗[R] N') = LinearMap.lTensor M f := by ext x; rfl
+    have hcoe : (g : M ⊗[R] N → M ⊗[R] N') = LinearMap.lTensor M f := by
+      ext x
+      rfl
     rw [hcoe]
     exact lTensor_preserves_injective_linearMap (M := M) f hf
   have hbot : Function.Injective (LinearMap.lTensor A g) :=
@@ -49,7 +52,8 @@ theorem tensor_tower {R S : Type*} [CommRing R] [CommRing S] [Algebra R S]
       = LinearMap.lTensor A g ∘ (eN : _ → _) := by
     simpa using congrArg (fun L : _ →ₗ[R] _ ↦ (L : _ → _)) hsqL
   have hcomp : Function.Injective ((eN' : _ → _) ∘ LinearMap.lTensor (A ⊗[S] M) f) := by
-    rw [hsq]; exact hbot.comp eN.injective
+    rw [hsq]
+    exact hbot.comp eN.injective
   exact hcomp.of_comp
 
 end TensorTower

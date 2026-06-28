@@ -20,8 +20,8 @@ theorem Module.Flat.trans_compHom {R S : Type*} [CommRing R] [CommRing S] (φ : 
     letI := Module.compHom M φ; Module.Flat R M := by
   letI := φ.toAlgebra
   letI := Module.compHom M φ
-  haveI : IsScalarTower R S M := IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
-  haveI : Module.Flat R S := hφ
+  have : IsScalarTower R S M := IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
+  have : Module.Flat R S := hφ
   exact Module.Flat.trans R S M
 
 /-- Restricting scalars along a bijective ring homomorphism preserves and reflects flatness. -/
