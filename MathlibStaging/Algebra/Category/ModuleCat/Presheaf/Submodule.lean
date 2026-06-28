@@ -49,6 +49,19 @@ structure Submodule (M : PresheafOfModules.{v} R) where
   map_mem ⦃X Y : Cᵒᵖ⦄ (f : X ⟶ Y) ⦃m : M.obj X⦄ (hm : m ∈ toSubmodule X) :
     M.map f m ∈ toSubmodule Y
 
+set_option backward.isDefEq.respectTransparency false in
+/-- The restriction map `M.map f` of a presheaf of modules `M`, bundled as a semilinear map
+along the ring map `R.map f`. -/
+noncomputable def restrictₛₗ (M : PresheafOfModules.{v} R) {X Y : Cᵒᵖ} (f : X ⟶ Y) :
+    M.obj X →ₛₗ[(R.map f).hom] M.obj Y where
+  toFun m := M.map f m
+  map_add' := map_add (M.map f).hom
+  map_smul' r m := M.map_smul f r m
+
+@[simp]
+lemma restrictₛₗ_apply (M : PresheafOfModules.{v} R) {X Y : Cᵒᵖ} (f : X ⟶ Y) (m : M.obj X) :
+    M.restrictₛₗ f m = M.map f m := rfl
+
 namespace Submodule
 
 variable {M : PresheafOfModules.{v} R} (N : M.Submodule)
@@ -74,7 +87,9 @@ noncomputable def toPresheafOfModules : PresheafOfModules.{v} R where
 lemma toPresheafOfModules_obj (X : Cᵒᵖ) :
     (N.toPresheafOfModules).obj X = ModuleCat.of _ (N.toSubmodule X) := rfl
 
-@[simp]
+-- `nolint simpNF`: the LHS is in the intended form; the false positive comes from
+-- `toPresheafOfModules_obj` rewriting the (irrelevant) type ascription of the argument.
+@[simp, nolint simpNF]
 lemma toPresheafOfModules_map_apply {X Y : Cᵒᵖ} (f : X ⟶ Y) (m : N.toSubmodule X) :
     ((N.toPresheafOfModules).map f m).val = M.map f m.val := rfl
 
@@ -84,7 +99,8 @@ noncomputable def ι : N.toPresheafOfModules ⟶ M :=
           naturality := fun {X Y} f ↦ by ext m; rfl }
     (fun X r m ↦ rfl)
 
-@[simp]
+-- `nolint simpNF`: as for `toPresheafOfModules_map_apply`, the LHS is in the intended form.
+@[simp, nolint simpNF]
 lemma ι_app_apply (X : Cᵒᵖ) (m : N.toSubmodule X) : (N.ι).app X m = m.val := rfl
 
 lemma ι_app_injective (X : Cᵒᵖ) : Function.Injective ((N.ι).app X) :=
@@ -104,31 +120,78 @@ instance : PartialOrder M.Submodule :=
 lemma le_iff {N₁ N₂ : M.Submodule} : N₁ ≤ N₂ ↔ ∀ X, N₁.toSubmodule X ≤ N₂.toSubmodule X :=
   Iff.rfl
 
-instance : InfSet M.Submodule where
+/-- The family `N` is contained in the preimage of `N` under each restriction map of `M`. -/
+lemma le_comap {X Y : Cᵒᵖ} (f : X ⟶ Y) :
+    N.toSubmodule X ≤ (N.toSubmodule Y).comap (M.restrictₛₗ f) :=
+  fun _ hm ↦ N.map_mem f hm
+
+/-- The families of submodules of a presheaf of modules `M` form a `CompleteLattice`, with
+all the lattice operations computed pointwise. -/
+instance : CompleteLattice M.Submodule where
+  sup F G :=
+    { toSubmodule X := F.toSubmodule X ⊔ G.toSubmodule X
+      map_mem := fun _ _ f _ hm ↦ sup_le ((F.le_comap f).trans (Submodule.comap_mono le_sup_left))
+        ((G.le_comap f).trans (Submodule.comap_mono le_sup_right)) hm }
+  le_sup_left _ _ _ := le_sup_left
+  le_sup_right _ _ _ := le_sup_right
+  sup_le _ _ _ h₁ h₂ X := sup_le (h₁ X) (h₂ X)
+  inf F G :=
+    { toSubmodule X := F.toSubmodule X ⊓ G.toSubmodule X
+      map_mem := fun _ _ f _ hm ↦ le_inf (inf_le_left.trans (F.le_comap f))
+        (inf_le_right.trans (G.le_comap f)) hm }
+  inf_le_left _ _ _ := inf_le_left
+  inf_le_right _ _ _ := inf_le_right
+  le_inf _ _ _ h₁ h₂ X := le_inf (h₁ X) (h₂ X)
+  sSup s :=
+    { toSubmodule X := ⨆ N ∈ s, N.toSubmodule X
+      map_mem := fun X Y f _ hm ↦ by
+        have h : (⨆ N ∈ s, N.toSubmodule X) ≤
+            (⨆ N ∈ s, N.toSubmodule Y).comap (M.restrictₛₗ f) :=
+          iSup₂_le fun N hN ↦ (N.le_comap f).trans
+            (Submodule.comap_mono (le_iSup₂ (f := fun N (_ : N ∈ s) ↦ N.toSubmodule Y) N hN))
+        exact h hm }
+  isLUB_sSup s := ⟨fun N hN X ↦ le_iSup₂_of_le N hN le_rfl,
+    fun _ hb X ↦ iSup₂_le fun N hN ↦ hb hN X⟩
   sInf s :=
     { toSubmodule X := ⨅ N ∈ s, N.toSubmodule X
-      map_mem := by
-        intro X Y f m hm
-        have hmem : ∀ N ∈ s, M.map f m ∈ N.toSubmodule Y := fun N hN ↦
-          N.map_mem f ((Submodule.mem_iInf _).mp ((Submodule.mem_iInf _).mp hm N) hN)
-        refine (Submodule.mem_iInf (x := (M.map f m : M.obj Y)) _).mpr fun N ↦
-          (Submodule.mem_iInf (x := (M.map f m : M.obj Y)) _).mpr fun hN ↦ hmem N hN }
+      map_mem := fun _ Y f m hm ↦
+        (Submodule.mem_iInf (x := (M.map f m : M.obj Y)) _).mpr fun N ↦
+          (Submodule.mem_iInf (x := (M.map f m : M.obj Y)) _).mpr fun hN ↦
+            N.map_mem f ((Submodule.mem_iInf _).mp ((Submodule.mem_iInf _).mp hm N) hN) }
+  isGLB_sInf s := ⟨fun N hN X ↦ iInf₂_le N hN,
+    fun _ hb X ↦ le_iInf₂ fun N hN ↦ hb hN X⟩
+  bot :=
+    { toSubmodule _ := ⊥
+      map_mem := fun X Y f _ hm ↦
+        (bot_le : (⊥ : _root_.Submodule (R.obj X) (M.obj X)) ≤
+          (⊥ : _root_.Submodule (R.obj Y) (M.obj Y)).comap (M.restrictₛₗ f)) hm }
+  bot_le _ _ := bot_le
+  top :=
+    { toSubmodule _ := ⊤
+      map_mem := fun _ _ f _ hm ↦ (Submodule.comap_top (M.restrictₛₗ f)).ge hm }
+  le_top _ _ := le_top
+
+@[simp]
+lemma sup_toSubmodule (N₁ N₂ : M.Submodule) (X : Cᵒᵖ) :
+    (N₁ ⊔ N₂).toSubmodule X = N₁.toSubmodule X ⊔ N₂.toSubmodule X := rfl
+
+@[simp]
+lemma inf_toSubmodule (N₁ N₂ : M.Submodule) (X : Cᵒᵖ) :
+    (N₁ ⊓ N₂).toSubmodule X = N₁.toSubmodule X ⊓ N₂.toSubmodule X := rfl
+
+@[simp]
+lemma sSup_toSubmodule (s : Set M.Submodule) (X : Cᵒᵖ) :
+    (sSup s).toSubmodule X = ⨆ N ∈ s, N.toSubmodule X := rfl
 
 @[simp]
 lemma sInf_toSubmodule (s : Set M.Submodule) (X : Cᵒᵖ) :
-    (sInf s).toSubmodule X = ⨅ N ∈ s, N.toSubmodule X :=
-  rfl
+    (sInf s).toSubmodule X = ⨅ N ∈ s, N.toSubmodule X := rfl
 
-/-- The families of submodules of a presheaf of modules `M` form a `CompleteLattice`, with
-all the lattice operations computed pointwise. The infimum is given explicitly by
-`PresheafOfModules.Submodule.sInf_toSubmodule`. -/
-instance : CompleteLattice M.Submodule :=
-  completeLatticeOfInf M.Submodule fun s ↦ by
-    refine ⟨?_, ?_⟩
-    · intro N hN X
-      exact iInf₂_le N hN
-    · intro L hL X
-      exact le_iInf₂ fun N hN ↦ hL hN X
+@[simp]
+lemma top_toSubmodule (X : Cᵒᵖ) : (⊤ : M.Submodule).toSubmodule X = ⊤ := rfl
+
+@[simp]
+lemma bot_toSubmodule (X : Cᵒᵖ) : (⊥ : M.Submodule).toSubmodule X = ⊥ := rfl
 
 end Lattice
 
