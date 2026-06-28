@@ -1,6 +1,11 @@
 import MathlibStaging.Algebra.Category.ModuleCat.Presheaf
 import MathlibStaging.Algebra.Category.ModuleCat.Presheaf.Submodule
+import MathlibStaging.Algebra.Module.RingHom
 import MathlibStaging.Algebra.Module.Submodule.Map
+import MathlibStaging.AlgebraicGeometry.Modules.Flat
 import MathlibStaging.Init
 import MathlibStaging.Linter.Staging
 import MathlibStaging.Meta.Overrides
+import MathlibStaging.RingTheory.Flat.Localization
+import MathlibStaging.RingTheory.Flat.Stability
+import MathlibStaging.RingTheory.RingHom.Flat
