@@ -29,12 +29,9 @@ monomorphism into `unit R`.
 ## Main definitions
 
 - `PresheafOfModules.annihilatorIdeal M X`: the annihilator ideal of `M` at `X`.
-- `PresheafOfModules.annihilatorSystem M`: the annihilator as a family of
-  submodules of `unit R`, stable under restriction.
-- `PresheafOfModules.annihilator M`: the annihilator as a sub-presheaf of modules
-  of `unit R`, with inclusion `PresheafOfModules.annihilatorι M`.
-- `SheafOfModules.annihilator M`: the annihilator as a sheaf of modules, with
-  inclusion `SheafOfModules.annihilatorι M`.
+- `PresheafOfModules.annihilator M`: the annihilator as a submodule of `unit R`.
+- `SheafOfModules.annihilator M`: the annihilator as a submodule of `unit R` in the sense of
+  `SheafOfModules.Submodule`, with inclusion `SheafOfModules.annihilatorι M`.
 -/
 
 @[expose] public section
@@ -64,9 +61,9 @@ lemma mem_annihilatorIdeal {X : Cᵒᵖ} (r : R.obj X) :
 
 variable (M)
 
-/-- The annihilator of `M`, as a family of submodules of `unit R` stable under
-restriction. -/
-noncomputable def annihilatorSystem : (unit R).Submodule where
+/-- The annihilator of a presheaf of modules `M`, as a submodule of `unit R`: its sections over
+`X` are those sections `r` of `R` annihilating `M` along every restriction. -/
+noncomputable def annihilator : (unit R).Submodule where
   obj X := M.annihilatorIdeal X
   map {X Y} f := by
     intro r hr
@@ -75,23 +72,7 @@ noncomputable def annihilatorSystem : (unit R).Submodule where
     have h := (mem_annihilatorIdeal _).mp hr (f ≫ g) m
     rwa [R.map_comp, RingCat.comp_apply] at h
 
-/-- The annihilator of a presheaf of modules `M`, a sub-presheaf of modules of
-`unit R`. -/
-noncomputable def annihilator : PresheafOfModules.{u} R :=
-  M.annihilatorSystem.toPresheafOfModules
-
-/-- The inclusion of the annihilator of `M` into `unit R`. -/
-noncomputable def annihilatorι : M.annihilator ⟶ unit R :=
-  M.annihilatorSystem.ι
-
-instance : Mono M.annihilatorι :=
-  inferInstanceAs (Mono M.annihilatorSystem.ι)
-
 variable {M}
-
-@[simp]
-lemma annihilatorι_app_apply (X : Cᵒᵖ) (r : M.annihilatorSystem.obj X) :
-    M.annihilatorι.app X r = r.val := rfl
 
 /-- The annihilator is antitone with respect to morphisms that are surjective on sections:
 if `f : M ⟶ N` is componentwise surjective, then everything annihilating `M` annihilates `N`. -/
@@ -108,7 +89,7 @@ end PresheafOfModules
 
 namespace SheafOfModules
 
-open PresheafOfModules CategoryTheory.Presheaf
+open PresheafOfModules
 
 variable {C : Type u₁} [Category.{v₁} C] {J : GrothendieckTopology C}
 
@@ -118,23 +99,25 @@ variable
 
 variable (M : SheafOfModules.{v} R)
 
-/-- The annihilator of a sheaf of modules `M`, as a sheaf of modules: a subobject of
-`unit R` whose sections over `X` are those `r : R.obj X` annihilating `M` locally. -/
-noncomputable def annihilator : SheafOfModules.{u} R :=
-  (SheafOfModules.unit R).ofLocalSubmodule M.val.annihilatorSystem <| by
-    -- `M.val` is separated, as the underlying type-valued presheaf of a sheaf.
+/-- The annihilator of a sheaf of modules `M`, as a submodule of `unit R`: a subobject whose
+sections over `X` are those `r : R.obj X` annihilating `M` locally. The associated sheaf of
+modules is `M.annihilator.toSheafOfModules`. -/
+noncomputable def annihilator : (SheafOfModules.unit R).Submodule where
+  toSubmodule := M.val.annihilator
+  isSheaf := by
     have hsep : Presieve.IsSheaf J (M.val.presheaf ⋙ CategoryTheory.forget AddCommGrpCat.{v}) :=
-      isSheaf_comp_forget M.isSheaf
-    intro X s S hS hmem
+      (isSheaf_iff_isSheaf_of_type J _).mp
+        (GrothendieckTopology.HasSheafCompose.isSheaf _ M.isSheaf)
+    intro X s hmem
     refine (mem_annihilatorIdeal s).mpr fun W φ m ↦ ?_
     -- It suffices, by separatedness, that every restriction of `R.map φ s • m` vanishes.
-    apply (hsep _ (J.pullback_stable φ.unop hS)).isSeparatedFor.ext
+    apply (hsep _ (J.pullback_stable φ.unop hmem)).isSeparatedFor.ext
     intro Y f hf
     -- On the pulled-back sieve, the relevant section lies in the annihilator ideal.
     have hcomp : (f ≫ φ.unop).op = φ ≫ f.op := by rw [op_comp, Quiver.Hom.op_unop]
     have key : R.obj.map (φ ≫ f.op) s ∈ M.val.annihilatorIdeal (op Y) := by
       rw [← hcomp]
-      exact hmem (f ≫ φ.unop) hf
+      exact hf
     -- Hence it annihilates the restriction of `m` (the goal here is, definitionally, this
     -- equation phrased through the forgetful functor to types).
     have h0 : R.obj.map (φ ≫ f.op) s • M.val.map f.op m = 0 := by
@@ -145,11 +128,11 @@ noncomputable def annihilator : SheafOfModules.{u} R :=
     exact this
 
 /-- The inclusion of the annihilator of `M` into `unit R`. -/
-noncomputable def annihilatorι : M.annihilator ⟶ unit R :=
-  ⟨M.val.annihilatorι⟩
+noncomputable def annihilatorι : M.annihilator.toSheafOfModules ⟶ unit R :=
+  ⟨M.val.annihilator.ι⟩
 
 instance : Mono M.annihilatorι := by
-  have : Mono ((forget R).map M.annihilatorι) := inferInstanceAs (Mono M.val.annihilatorι)
+  have : Mono ((forget R).map M.annihilatorι) := inferInstanceAs (Mono M.val.annihilator.ι)
   exact (forget R).mono_of_mono_map this
 
 end SheafOfModules
