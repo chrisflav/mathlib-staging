@@ -9,12 +9,6 @@ public import Mathlib.Algebra.Category.ModuleCat.Presheaf
 public import MathlibStaging.Init
 
 /-!
-# The restriction maps of a presheaf of modules as semilinear maps
-
-The restriction map `M.map f` of a presheaf of modules `M` along `f : X ⟶ Y` has codomain the
-module obtained from `M.obj Y` by restriction of scalars along `R.map f`. We bundle it as a
-genuine semilinear map `M.restrictₛₗ f : M.obj X →ₛₗ[(R.map f).hom] M.obj Y`, which is often more
-convenient to work with.
 -/
 
 @[expose] public section

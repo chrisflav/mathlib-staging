@@ -26,7 +26,6 @@ we construct the corresponding subobject of `M` in the category
 
 The families of submodules of `M` form a `CompleteLattice`, with all the lattice
 operations computed pointwise.
-
 -/
 
 @[expose] public section
@@ -40,8 +39,7 @@ namespace PresheafOfModules
 variable {C : Type u₁} [Category.{v₁} C] {R : Cᵒᵖ ⥤ RingCat.{u}}
 
 /-- A family of submodules `N X` of `M.obj X`, for a presheaf of modules `M`, stable
-under the restriction maps of `M`. This is the data needed to cut out a
-subobject of `M` in `PresheafOfModules R`. -/
+under the restriction maps of `M`. This defines a subobject of `M` in `PresheafOfModules R`. -/
 structure Submodule (M : PresheafOfModules.{v} R) where
   /-- the submodule of `M.obj X` -/
   obj (X : Cᵒᵖ) : _root_.Submodule (R.obj X) (M.obj X)
@@ -57,51 +55,47 @@ lemma ext {N₁ N₂ : M.Submodule} (h : ∀ X, N₁.obj X = N₂.obj X) :
     N₁ = N₂ := by
   cases N₁; cases N₂; congr 1; ext X : 1; exact h X
 
+@[grind .]
+lemma map_mem {X Y : Cᵒᵖ} (f : X ⟶ Y) {x : M.obj X} (hx : x ∈ N.obj X) :
+    M.map f x ∈ N.obj Y :=
+  N.map f hx
+
+attribute [local simp] LinearMap.restrict_apply ModuleCat.semilinearMapAddEquiv in
 set_option backward.isDefEq.respectTransparency false in
-/-- The subobject of `M` cut out by the family of submodules `N`, as a presheaf of modules: over
-`X` it is the submodule `N.obj X`, with restriction maps induced by those of `M`. -/
+/-- The presheaf of modules associated to a submodule. -/
+@[simps! obj]
 noncomputable def toPresheafOfModules : PresheafOfModules.{v} R where
   obj X := ModuleCat.of (R.obj X) (N.obj X)
-  map {X Y} f := ModuleCat.ofHom
-      (Y := (ModuleCat.restrictScalars (R.map f).hom).obj
-        (ModuleCat.of (R.obj Y) (N.obj Y)))
-    { toFun := fun m ↦ ⟨M.map f m.val, N.map f m.property⟩
-      map_add' := fun a b ↦ Subtype.ext (map_add (M.map f).hom a.val b.val)
-      map_smul' := fun r m ↦ Subtype.ext (M.map_smul f r m.val) }
-
-@[simp]
-lemma toPresheafOfModules_obj (X : Cᵒᵖ) :
-    (N.toPresheafOfModules).obj X = ModuleCat.of _ (N.obj X) := rfl
+  map {X Y} f :=
+    ModuleCat.semilinearMapAddEquiv _ _ _ <|
+      (M.restrictₛₗ f).restrict (p := N.obj X) (q := N.obj Y) (fun _ hc ↦ N.map_mem _ hc)
 
 @[simp]
 lemma toPresheafOfModules_map_apply {X Y : Cᵒᵖ} (f : X ⟶ Y) (m : N.obj X) :
-    (dsimp% [toPresheafOfModules_obj] ((N.toPresheafOfModules).map f m).val) = M.map f m.val := rfl
+    dsimp% ((N.toPresheafOfModules).map f m).val = M.map f m.val := by
+  rfl
 
 /-- The inclusion of the subobject cut out by `N` into `M`. -/
+@[simps!]
 noncomputable def ι : N.toPresheafOfModules ⟶ M :=
-  homMk { app := fun X ↦ AddCommGrpCat.ofHom (N.obj X).subtype.toAddMonoidHom
-          naturality := fun {X Y} f ↦ by ext m; rfl }
-    (fun X r m ↦ rfl)
+  homMk { app := fun X ↦ AddCommGrpCat.ofHom (N.obj X).subtype.toAddMonoidHom } (by cat_disch)
 
-@[simp]
-lemma ι_app_apply (X : Cᵒᵖ) (m : N.obj X) :
-    (dsimp% [toPresheafOfModules_obj] ((N.ι).app X m)) = m.val := rfl
-
-lemma ι_app_injective (X : Cᵒᵖ) : Function.Injective ((N.ι).app X) :=
-  Subtype.val_injective
-
-instance : Mono N.ι := mono_of_injective N.ι_app_injective
-
-section Lattice
+instance : Mono N.ι := mono_of_injective fun _ ↦ Subtype.val_injective
 
 instance : PartialOrder M.Submodule :=
-  PartialOrder.lift (fun N : M.Submodule ↦ N.obj) fun _ _ h ↦ ext (congrFun h)
+  PartialOrder.lift _ fun _ _ h ↦ ext (congrFun h)
 
 lemma le_iff {N₁ N₂ : M.Submodule} : N₁ ≤ N₂ ↔ ∀ X, N₁.obj X ≤ N₂.obj X :=
-  Iff.rfl
+  .rfl
 
-/-- The families of submodules of a presheaf of modules `M` form a `CompleteLattice`, with
-all the lattice operations computed pointwise. -/
+-- TODO: move to an earlier file
+lemma _root_.Submodule.comap_iInf' {R R₂ M M₂ : Type*}
+    [Semiring R] [Semiring R₂] [AddCommMonoid M] [AddCommMonoid M₂] [Module R M] [Module R₂ M₂]
+    {σ₁₂ : R →+* R₂} {ι : Sort*} (f : M →ₛₗ[σ₁₂] M₂) (p : ι → _root_.Submodule R₂ M₂) :
+    Submodule.comap f (⨅ i, p i) = ⨅ i, Submodule.comap f (p i) := by
+  ext; simp
+
+@[simps sup_obj inf_obj sSup_obj sInf_obj top_obj bot_obj]
 instance : CompleteLattice M.Submodule where
   sup F G :=
     { obj X := F.obj X ⊔ G.obj X
@@ -118,50 +112,24 @@ instance : CompleteLattice M.Submodule where
   le_inf _ _ _ h₁ h₂ X := le_inf (h₁ X) (h₂ X)
   sSup s :=
     { obj X := ⨆ N ∈ s, N.obj X
-      map {_ Y} f := iSup₂_le fun N hN ↦ (N.map f).trans
-        (Submodule.comap_mono (le_iSup₂ (f := fun N (_ : N ∈ s) ↦ N.obj Y) N hN)) }
-  isLUB_sSup _ := ⟨fun N hN _ ↦ le_iSup₂_of_le N hN le_rfl,
-    fun _ hb X ↦ iSup₂_le fun _ hN ↦ hb hN X⟩
+      map f := iSup₂_le fun N hN ↦ (N.map f).trans
+        (Submodule.comap_mono (le_iSup₂_of_le N hN le_rfl)) }
+  isLUB_sSup _ :=
+    ⟨fun N hN _ ↦ le_iSup₂_of_le N hN le_rfl, fun _ hb X ↦ iSup₂_le fun _ hN ↦ hb hN X⟩
   sInf s :=
     { obj X := ⨅ N ∈ s, N.obj X
-      map f := fun _ hm ↦ Submodule.mem_comap.mpr <|
-        (Submodule.mem_iInf _).mpr fun N ↦ (Submodule.mem_iInf _).mpr fun hN ↦
-          Submodule.mem_comap.mp (N.map f ((Submodule.mem_iInf _).mp
-            ((Submodule.mem_iInf _).mp hm N) hN)) }
-  isGLB_sInf _ := ⟨fun N hN _ ↦ iInf₂_le N hN,
-    fun _ hb X ↦ le_iInf₂ fun _ hN ↦ hb hN X⟩
-  bot :=
-    { obj _ := ⊥
-      map _ := bot_le }
+      map f := by
+        simp_rw [Submodule.comap_iInf', le_iInf₂_iff]
+        intro N hN
+        refine iInf₂_le_of_le _ hN (N.map _) }
+  isGLB_sInf _ :=
+    ⟨fun N hN _ ↦ iInf₂_le N hN, fun _ hb X ↦ le_iInf₂ fun _ hN ↦ hb hN X⟩
+  bot.obj := ⊥
+  bot.map _ := bot_le
   bot_le _ _ := bot_le
-  top :=
-    { obj _ := ⊤
-      map _ := le_top }
+  top.obj := ⊤
+  top.map _ := le_top
   le_top _ _ := le_top
-
-@[simp]
-lemma sup_obj (N₁ N₂ : M.Submodule) (X : Cᵒᵖ) :
-    (N₁ ⊔ N₂).obj X = N₁.obj X ⊔ N₂.obj X := rfl
-
-@[simp]
-lemma inf_obj (N₁ N₂ : M.Submodule) (X : Cᵒᵖ) :
-    (N₁ ⊓ N₂).obj X = N₁.obj X ⊓ N₂.obj X := rfl
-
-@[simp]
-lemma sSup_obj (s : Set M.Submodule) (X : Cᵒᵖ) :
-    (sSup s).obj X = ⨆ N ∈ s, N.obj X := rfl
-
-@[simp]
-lemma sInf_obj (s : Set M.Submodule) (X : Cᵒᵖ) :
-    (sInf s).obj X = ⨅ N ∈ s, N.obj X := rfl
-
-@[simp]
-lemma top_obj (X : Cᵒᵖ) : (⊤ : M.Submodule).obj X = ⊤ := rfl
-
-@[simp]
-lemma bot_obj (X : Cᵒᵖ) : (⊥ : M.Submodule).obj X = ⊥ := rfl
-
-end Lattice
 
 end Submodule
 
