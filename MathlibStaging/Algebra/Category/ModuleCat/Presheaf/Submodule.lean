@@ -7,6 +7,7 @@ module
 
 public import MathlibStaging.Init
 public import MathlibStaging.Algebra.Category.ModuleCat.Presheaf
+public import MathlibStaging.Algebra.Module.Submodule.Map
 public import Mathlib.Algebra.Category.ModuleCat.Presheaf.EpiMono
 
 /-!
@@ -87,13 +88,6 @@ instance : PartialOrder M.Submodule :=
 
 lemma le_iff {N₁ N₂ : M.Submodule} : N₁ ≤ N₂ ↔ ∀ X, N₁.obj X ≤ N₂.obj X :=
   .rfl
-
--- TODO: move to an earlier file
-lemma _root_.Submodule.comap_iInf' {R R₂ M M₂ : Type*}
-    [Semiring R] [Semiring R₂] [AddCommMonoid M] [AddCommMonoid M₂] [Module R M] [Module R₂ M₂]
-    {σ₁₂ : R →+* R₂} {ι : Sort*} (f : M →ₛₗ[σ₁₂] M₂) (p : ι → _root_.Submodule R₂ M₂) :
-    Submodule.comap f (⨅ i, p i) = ⨅ i, Submodule.comap f (p i) := by
-  ext; simp
 
 @[simps sup_obj inf_obj sSup_obj sInf_obj top_obj bot_obj]
 instance : CompleteLattice M.Submodule where
