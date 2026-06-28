@@ -9,10 +9,6 @@ public import Mathlib.Algebra.Module.Submodule.Map
 public import MathlibStaging.Init
 
 /-!
-# Comapping an infimum of submodules
-
-This file generalizes `Submodule.comap_iInf` to arbitrary semilinear maps, dropping the
-`RingHomSurjective` assumption. It is meant to replace `Submodule.comap_iInf` upstream.
 -/
 
 @[expose] public section
@@ -23,6 +19,8 @@ variable {R R₂ M M₂ : Type*}
   [Semiring R] [Semiring R₂] [AddCommMonoid M] [AddCommMonoid M₂] [Module R M] [Module R₂ M₂]
   {σ₁₂ : R →+* R₂}
 
+/-- Comap commutes with infima of submodules. This generalizes `Submodule.comap_iInf` to
+arbitrary semilinear maps, dropping the `RingHomSurjective` assumption. -/
 @[simp]
 theorem comap_iInf' {ι : Sort*} (f : M →ₛₗ[σ₁₂] M₂) (p : ι → Submodule R₂ M₂) :
     comap f (⨅ i, p i) = ⨅ i, comap f (p i) := by
