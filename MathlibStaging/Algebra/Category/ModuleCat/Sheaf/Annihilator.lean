@@ -185,12 +185,14 @@ noncomputable def annihilator : SheafOfModules.{max v₁ u₁} R :=
     have key : R.obj.map (φ ≫ f.op) s ∈ M.val.annihilatorIdeal (op Y) := by
       rw [← hcomp]
       exact hmem (f ≫ φ.unop) hf
-    -- Hence it annihilates the restriction of `m`.
+    -- Hence it annihilates the restriction of `m` (the goal here is, definitionally, this
+    -- equation phrased through the forgetful functor to types).
     have h0 : R.obj.map (φ ≫ f.op) s • M.val.map f.op m = 0 := by
       have h := (mem_annihilatorIdeal _).mp key (𝟙 (op Y)) (M.val.map f.op m)
       rwa [R.obj.map_id, RingCat.id_apply] at h
-    show M.val.map f.op (R.obj.map φ s • m) = M.val.map f.op 0
-    rw [map_zero, M.val.map_smul, ← RingCat.comp_apply, ← R.obj.map_comp, h0]
+    have : M.val.map f.op (R.obj.map φ s • m) = M.val.map f.op 0 := by
+      rw [map_zero, M.val.map_smul, ← RingCat.comp_apply, ← R.obj.map_comp, h0]
+    exact this
 
 /-- The inclusion of the annihilator of `M` into `unit R`. -/
 noncomputable def annihilatorι : M.annihilator ⟶ unit R :=
