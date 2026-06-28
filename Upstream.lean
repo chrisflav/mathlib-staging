@@ -116,18 +116,24 @@ def fileImportGraph (env : Environment) : NameMap (Array Name) := Id.run do
     g := g.insert mod (env.header.moduleData[idx]!.imports.map (·.module))
   return g
 
-/-- File-level rows: one per staging content module, over the module import graph
-restricted to staging content modules. -/
-def analyzeFiles (env : Environment) : Array Row := Id.run do
-  let graph : NameMap (Array Name) :=
-    (fileImportGraph env).filterMap fun n imps =>
-      if isContentModule n then some (imps.filter isContentModule) else none
+/-- Build reported rows from a node graph, attributing each node to a module. -/
+def rowsOf (graph : NameMap (Array Name)) (moduleOf : Name → Name) : Array Row := Id.run do
   let metrics := allMetrics graph
   let mut rows := #[]
   for (n, _) in graph do
-    let m := (metrics.find? n).getD { depth := 0, trans := {} }
-    rows := rows.push { name := n, module := n, depth := m.depth, deps := m.trans.size }
+    let m := (metrics.find? n).getD default
+    rows := rows.push { name := n, module := moduleOf n, depth := m.depth, deps := m.trans.size }
   return rows
+
+/-- The staging-internal file dependency graph: each staging content module mapped
+to its staging content imports. -/
+def stagingFileGraph (env : Environment) : NameMap (Array Name) :=
+  (fileImportGraph env).filterMap fun n imps =>
+    if isContentModule n then some (imps.filter isContentModule) else none
+
+/-- File-level rows: one per staging content module. -/
+def analyzeFiles (env : Environment) : Array Row :=
+  rowsOf (stagingFileGraph env) id
 
 /-- Whether `n` is an auto-generated declaration (recursor, constructor,
 `noConfusion`, internal machinery, …) rather than a source-written one, and so
@@ -138,9 +144,11 @@ def isGenerated (env : Environment) (n : Name) : Bool :=
     | some (.recInfo _) | some (.ctorInfo _) => true
     | _ => false
 
-/-- Declaration-level rows: one per source-written declaration in a staging
-content module, over the declaration-use graph restricted to such declarations. -/
-def analyzeDecls (env : Environment) : CoreM (Array Row) := do
+/-- The staging-internal declaration dependency graph: each source-written
+declaration in a staging content module mapped to the staging declarations it
+uses. A structure/inductive's field-type dependencies live in its constructors,
+which are not nodes themselves, so they are folded into the type node. -/
+def stagingDeclGraph (env : Environment) : CoreM (NameMap (Array Name)) := do
   -- The source-written declarations living in staging content modules.
   let mut nodes : Array Name := #[]
   for (mod, idx) in env.header.moduleNames.zipIdx do
@@ -151,25 +159,20 @@ def analyzeDecls (env : Environment) : CoreM (Array Row) := do
         if !isGenerated env n && (← findDeclarationRanges? n).isSome then
           nodes := nodes.push n
   let nodeSet : NameSet := nodes.foldl (init := {}) fun acc n => acc.insert n
-  -- Edges: a declaration depends on the staging declarations it uses.
   let mut graph : NameMap (Array Name) := {}
   for n in nodes do
     let mut used := (← getConstInfo n).getUsedConstantsAsSet
-    -- A structure/inductive's real dependencies (its field types) live in its
-    -- constructors, which are not reported separately; fold them into the type node.
     if let some (.inductInfo val) := env.find? n then
       for ctor in val.ctors do
         used := nsUnion used (← getConstInfo ctor).getUsedConstantsAsSet
     let deps := used.foldl (init := #[]) fun acc e =>
       if e != n && nodeSet.contains e then acc.push e else acc
     graph := graph.insert n deps
-  let metrics := allMetrics graph
-  let mut rows := #[]
-  for n in nodes do
-    let m := (metrics.find? n).getD { depth := 0, trans := {} }
-    rows := rows.push
-      { name := n, module := (env.getModuleFor? n).getD .anonymous, depth := m.depth, deps := m.trans.size }
-  return rows
+  return graph
+
+/-- Declaration-level rows: one per source-written staging declaration. -/
+def analyzeDecls (env : Environment) : CoreM (Array Row) :=
+  return rowsOf (← stagingDeclGraph env) (fun n => (env.getModuleFor? n).getD .anonymous)
 
 /-- Render an aligned text table. -/
 def renderTable (headers : Array String) (rows : Array (Array String)) : String := Id.run do
@@ -320,6 +323,99 @@ def runCheck (p : Parsed) : IO UInt32 := do
   -- Non-zero exit when cleanup is pending, so CI can flag it.
   return if anyMerged then 1 else 0
 
+/-! ## `lake exe upstream viz`
+
+Emits the staging dependency graph for visualisation, either as a versioned JSON
+record (modelled on verso-blueprint's `GraphData`, to be rendered by the Verso
+blueprint site) or as Graphviz DOT. Nodes carry an upstreaming `status` and the
+matching presentation colours, separated as in `GraphData` (semantics vs visual).
+-/
+
+/-- The upstreaming status of a node: `upstreamable` (no staging dependencies,
+ready to upstream now), `pending` (already in an open mathlib PR via
+`@[upstreamed]`), or `blocked` (depends on staging declarations that must be
+upstreamed first). -/
+def statusOf (depth : Nat) (pr : Option Nat) : String :=
+  if pr.isSome then "pending" else if depth == 0 then "upstreamable" else "blocked"
+
+/-- The `(fill, border)` colours for a status. -/
+def statusColors : String → String × String
+  | "upstreamable" => ("#dbeafe", "#2563eb")  -- blue: ready to upstream
+  | "pending"      => ("#ede9fe", "#7c3aed")  -- violet: in an open PR
+  | "blocked"      => ("#fef3c7", "#f59e0b")  -- amber: blocked by staging deps
+  | _              => ("#ffffff", "#334155")
+
+/-- The graph as a versioned JSON record (nodes with status + visual colours,
+edges, and module groups), for the Verso blueprint renderer. -/
+def vizJson (kind : String) (graph : NameMap (Array Name)) (moduleOf : Name → Name)
+    (prOf : Name → Option Nat) : Json := Id.run do
+  let metrics := allMetrics graph
+  let mut nodeObjs := #[]
+  let mut edgeObjs := #[]
+  let mut modules : Array String := #[]
+  let mut nodeMods : Array (String × String) := #[]
+  for (n, deps) in graph do
+    let m := (metrics.find? n).getD default
+    let pr := prOf n
+    let st := statusOf m.depth pr
+    let (fill, border) := statusColors st
+    let modName := (moduleOf n).toString
+    unless modules.contains modName do modules := modules.push modName
+    nodeMods := nodeMods.push (n.toString, modName)
+    nodeObjs := nodeObjs.push <| Json.mkObj
+      [("id", Json.str n.toString), ("label", Json.str n.toString), ("group", Json.str modName),
+       ("depth", toJson m.depth), ("transitiveDeps", toJson m.trans.size), ("status", Json.str st),
+       ("upstreamedPR", (pr.map (toJson ·)).getD Json.null),
+       ("visual", Json.mkObj [("fill", Json.str fill), ("border", Json.str border)])]
+    for d in deps do
+      edgeObjs := edgeObjs.push <|
+        Json.mkObj [("source", Json.str n.toString), ("target", Json.str d.toString)]
+  let groupObjs := modules.map fun modName =>
+    let ids := nodeMods.filterMap fun (id, m) => if m == modName then some (Json.str id) else none
+    Json.mkObj [("id", Json.str modName), ("label", Json.str modName), ("nodes", Json.arr ids)]
+  return Json.mkObj
+    [("schemaVersion", toJson (1 : Nat)), ("kind", Json.str kind),
+     ("nodes", Json.arr nodeObjs), ("edges", Json.arr edgeObjs), ("groups", Json.arr groupObjs)]
+
+/-- The graph as a Graphviz DOT string, nodes coloured by upstreaming status. -/
+def vizDot (graph : NameMap (Array Name)) (prOf : Name → Option Nat) : String := Id.run do
+  let metrics := allMetrics graph
+  let mut lines := #["digraph upstream {", "  rankdir=LR;", "  node [style=filled, shape=box];"]
+  for (n, deps) in graph do
+    let m := (metrics.find? n).getD default
+    let (fill, border) := statusColors (statusOf m.depth (prOf n))
+    lines := lines.push s!"  \"{n}\" [fillcolor=\"{fill}\", color=\"{border}\"];"
+    for d in deps do
+      lines := lines.push s!"  \"{n}\" -> \"{d}\";"
+  lines := lines.push "}"
+  return String.intercalate "\n" lines.toList
+
+/-- Implementation of `lake exe upstream viz`. -/
+def runViz (p : Parsed) : IO UInt32 := do
+  let decls := p.hasFlag "decls"
+  let fmt := (p.flag? "format").map (·.as! String) |>.getD "json"
+  let out? := (p.flag? "out").map (·.as! String)
+  initSearchPath (← findSysroot)
+  unsafe Lean.enableInitializersExecution
+  -- Load with `loadExts` + `importAll` so the `@[upstreamed]` tags are available.
+  let contentMods ← contentModulesFromAggregator
+  let env ← unsafe importModules (contentMods.map ({module := ·, importAll := true})) {}
+    (trustLevel := 1024) (loadExts := true)
+  let prOf := fun n => MathlibStaging.getUpstreamedPR? env n
+  let output ← if decls then do
+      let ctx : Core.Context := { options := {}, fileName := "<upstream>", fileMap := default }
+      let graph ← Prod.fst <$> CoreM.toIO (stagingDeclGraph env) ctx { env }
+      pure <| if fmt == "dot" then vizDot graph prOf
+        else (vizJson "decls" graph (fun n => (env.getModuleFor? n).getD .anonymous) prOf).pretty
+    else
+      let graph := stagingFileGraph env
+      pure <| if fmt == "dot" then vizDot graph (fun _ => none)
+        else (vizJson "files" graph id (fun _ => none)).pretty
+  match out? with
+  | some f => IO.FS.writeFile f output; IO.println s!"wrote {f}"
+  | none => IO.println output
+  return 0
+
 /-- `lake exe upstream report` -/
 def reportCmd : Cmd := `[Cli|
   report VIA runReport; ["0.1.0"]
@@ -345,6 +441,19 @@ def checkCmd : Cmd := `[Cli|
                       (default: `leanprover-community/mathlib4`)."
 ]
 
+/-- `lake exe upstream viz` -/
+def vizCmd : Cmd := `[Cli|
+  viz VIA runViz; ["0.1.0"]
+  "Emit the staging dependency graph for visualisation: a versioned JSON record \
+   (modelled on verso-blueprint's `GraphData`, for the Verso blueprint site) or \
+   Graphviz DOT. Nodes are coloured by upstreaming status."
+
+  FLAGS:
+    decls;             "Graph individual declarations instead of whole files."
+    "format" : String; "Output format, `json` (default) or `dot`."
+    "out" : String;    "Write to this file instead of stdout."
+]
+
 /-- The `upstream` command, dispatching to its subcommands. -/
 def upstreamCmd : Cmd := `[Cli|
   upstream NOOP; ["0.1.0"]
@@ -352,7 +461,8 @@ def upstreamCmd : Cmd := `[Cli|
 
   SUBCOMMANDS:
     reportCmd;
-    checkCmd
+    checkCmd;
+    vizCmd
 ]
 
 end Upstream
