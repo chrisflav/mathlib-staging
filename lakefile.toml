@@ -33,3 +33,12 @@ name = "MathlibStaging"
 [[lean_exe]]
 name = "mirror_imports"
 root = "MirrorImports"
+
+# The upstreaming toolkit (see `Upstream.lean`): `lake exe upstream report`
+# ranks staging files/declarations by how ready they are to upstream to mathlib.
+# `supportInterpreter` is required because it loads the staging environment at
+# runtime via `withImportModules`.
+[[lean_exe]]
+name = "upstream"
+root = "Upstream"
+supportInterpreter = true
