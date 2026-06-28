@@ -39,8 +39,9 @@ Mirror files without an upstream counterpart (i.e. genuinely new content) are
 unrestricted by the import and module-docstring policies, but must still import
 `MathlibStaging.Init`.
 
-The staging infrastructure modules (`MathlibStaging.Init` itself and everything
-under `MathlibStaging.Linter`) are exempt from all of these checks.
+The staging infrastructure modules (`MathlibStaging.Init` itself, everything
+under `MathlibStaging.Linter`, and `MathlibStaging.Overrides`) are exempt from
+all of these checks.
 
 **The aggregator file.** It also checks that the library root `MathlibStaging.lean`
 is up to date, i.e. that `lake exe mk_all --lib MathlibStaging --check` would
@@ -63,10 +64,13 @@ def mathlibRoot : Name := `Mathlib
 /-- The staging prelude that every staging file must import (transitively). -/
 def initModule : Name := `MathlibStaging.Init
 
-/-- Whether `mod` is a staging infrastructure module (the prelude or a linter
-definition), which is exempt from the import policy and the Init requirement. -/
+/-- Whether `mod` is a staging infrastructure module (the prelude, a linter
+definition, or the `@[overrides]` attribute), which is exempt from the import
+policy and the Init requirement. These modules are the ones aggregated by
+`MathlibStaging.Init`, so they cannot import it without creating a cycle. -/
 def isInfraModule (mod : Name) : Bool :=
-  mod == initModule || (`MathlibStaging.Linter).isPrefixOf mod
+  mod == initModule || mod == `MathlibStaging.Overrides ||
+    (`MathlibStaging.Linter).isPrefixOf mod
 
 /-- The string components of a name, root first; `none` if `n` has a numeric
 component (which never occurs in module names). -/
