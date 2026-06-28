@@ -3,6 +3,7 @@ module
 public import Cli.Basic
 import ImportGraph.Imports.RequiredModules
 import ImportGraph.Lean.Environment
+import MathlibStaging.Meta.UpstreamedExt
 import Lean.DeclarationRange
 import Lean.Data.Json
 import Lean.Util.Path
@@ -222,7 +223,7 @@ def runReport (p : Parsed) : IO UInt32 := do
   unsafe Lean.enableInitializersExecution
   -- All work that touches environment-owned `Name`s happens inside the closure;
   -- only the finished `String` escapes (the env's imported data is freed on exit).
-  let output ← unsafe withImportModules #[{module := stagingRoot}] {} (trustLevel := 1024) fun env => do
+  let output ← unsafe withImportModules #[{module := stagingRoot, importAll := true}] {} (trustLevel := 1024) fun env => do
     let rows ← if decls then
         let ctx : Core.Context := { options := {}, fileName := "<upstream>", fileMap := default }
         Prod.fst <$> CoreM.toIO (analyzeDecls env) ctx { env }
@@ -231,6 +232,93 @@ def runReport (p : Parsed) : IO UInt32 := do
     pure (formatReport rows decls maxDepth? maxDeps? asJson)
   IO.println output
   return 0
+
+/-! ## `lake exe upstream check` -/
+
+/-- Whether a pull request with the given `state` and `title` is merged. Accounts
+for mathlib's Bors queue: a Bors-merged PR shows up as `CLOSED` with
+`[Merged by Bors]` in its title rather than `MERGED`. -/
+def prMerged (state title : String) : Bool :=
+  state == "MERGED" || (title.splitOn "[Merged by Bors]").length > 1
+
+/-- A batched GraphQL query for the state and title of every pull request in
+`prs`, in repository `owner/name`. (Built by concatenation rather than `s!` so the
+GraphQL braces are not mistaken for interpolation.) -/
+def mergeQuery (owner name : String) (prs : Array Nat) : String :=
+  let fields := String.intercalate " " <| prs.toList.map fun n =>
+    "pr" ++ toString n ++ ": pullRequest(number: " ++ toString n ++ ") { state title }"
+  "query { repository(owner: \"" ++ owner ++ "\", name: \"" ++ name ++ "\") { " ++ fields ++ " } }"
+
+/-- Parse a `gh api graphql` response, returning whether each pull request in
+`prs` is merged. PRs that are missing/`null` in the response count as not merged. -/
+def parseMerged (out : String) (prs : Array Nat) : Except String (Array (Nat × Bool)) := do
+  let data ← (← Json.parse out).getObjVal? "data"
+  let repo ← data.getObjVal? "repository"
+  return prs.map fun n =>
+    let pr := (repo.getObjVal? s!"pr{n}").toOption.getD Json.null
+    let state := (pr.getObjVal? "state" >>= Json.getStr?).toOption.getD ""
+    let title := (pr.getObjVal? "title" >>= Json.getStr?).toOption.getD ""
+    (n, prMerged state title)
+
+/-- The staging *content* modules, read from the `MathlibStaging.lean` aggregator
+file (one `import` line per module). Avoids loading an environment merely to
+enumerate modules. -/
+def contentModulesFromAggregator : IO (Array Name) := do
+  let src ← IO.FS.readFile "MathlibStaging.lean"
+  return src.splitOn "\n"
+    |>.filterMap (fun line =>
+      if line.startsWith "import " then some (line.drop 7).toName else none)
+    |>.toArray.filter isContentModule
+
+/-- Implementation of `lake exe upstream check`. -/
+def runCheck (p : Parsed) : IO UInt32 := do
+  let repo := (p.flag? "repo").map (·.as! String) |>.getD "leanprover-community/mathlib4"
+  let parts := repo.splitOn "/"
+  unless parts.length == 2 do
+    IO.eprintln s!"--repo must be of the form `owner/name`, got `{repo}`."
+    return 2
+  let owner := parts[0]!
+  let name := parts[1]!
+  initSearchPath (← findSysroot)
+  unsafe Lean.enableInitializersExecution
+  -- Import the content modules with `importAll` so the (private) `@[upstreamed]`
+  -- extension entries are loaded; collect `(declaration, pr)` tags, converting
+  -- names to strings inside the closure (environment data is freed on exit).
+  -- `withImportModules` loads with `loadExts := false`, which does not initialize
+  -- environment extensions; we need `importModules (loadExts := true)` so the
+  -- `@[upstreamed]` extension state is available. `importAll` loads the (private)
+  -- extension entries written during elaboration.
+  let contentMods ← contentModulesFromAggregator
+  let env ← unsafe importModules (contentMods.map ({module := ·, importAll := true})) {}
+    (trustLevel := 1024) (loadExts := true)
+  let mut tags : Array (String × Nat) := #[]
+  for (mod, idx) in env.header.moduleNames.zipIdx do
+    if isContentModule mod then
+      for n in env.header.moduleData[idx]!.constNames do
+        if let some pr := MathlibStaging.getUpstreamedPR? env n then
+          tags := tags.push (n.toString, pr)
+  if tags.isEmpty then
+    IO.println "No `@[upstreamed]` declarations found."
+    return 0
+  let prs := (tags.map (·.2)).toList.eraseDups.toArray
+  let out ← IO.Process.output { cmd := "gh", args := #["api", "graphql", "-f", s!"query={mergeQuery owner name prs}"] }
+  unless out.exitCode == 0 do
+    IO.eprintln s!"`gh api graphql` failed (is `gh` installed and authenticated?):\n{out.stderr}"
+    return 2
+  let merged ← match parseMerged out.stdout prs with
+    | .ok m => pure m
+    | .error e => IO.eprintln s!"Could not parse the GitHub response: {e}"; return 2
+  let mut anyMerged := false
+  for pr in prs.qsort (· < ·) do
+    let decls := (tags.filterMap fun (d, q) => if q == pr then some d else none).qsort (· < ·)
+    if (merged.find? (·.1 == pr)).any (·.2) then
+      anyMerged := true
+      IO.println s!"✓ {repo}#{pr} is merged — {decls.size} declaration(s) can be removed from staging:"
+      for d in decls do IO.println s!"    {d}"
+    else
+      IO.println s!"· {repo}#{pr} is still open — {decls.size} declaration(s)."
+  -- Non-zero exit when cleanup is pending, so CI can flag it.
+  return if anyMerged then 1 else 0
 
 /-- `lake exe upstream report` -/
 def reportCmd : Cmd := `[Cli|
@@ -245,13 +333,26 @@ def reportCmd : Cmd := `[Cli|
     json;              "Emit JSON instead of an aligned table."
 ]
 
+/-- `lake exe upstream check` -/
+def checkCmd : Cmd := `[Cli|
+  check VIA runCheck; ["0.1.0"]
+  "Report which `@[upstreamed N]` declarations are in already-merged mathlib pull \
+   requests, and so can now be removed from the staging library. Requires the \
+   GitHub CLI `gh` to be installed and authenticated."
+
+  FLAGS:
+    "repo" : String; "The GitHub repository to query, as `owner/name` \
+                      (default: `leanprover-community/mathlib4`)."
+]
+
 /-- The `upstream` command, dispatching to its subcommands. -/
 def upstreamCmd : Cmd := `[Cli|
   upstream NOOP; ["0.1.0"]
   "Tooling for upstreaming MathlibStaging content to mathlib."
 
   SUBCOMMANDS:
-    reportCmd
+    reportCmd;
+    checkCmd
 ]
 
 end Upstream
