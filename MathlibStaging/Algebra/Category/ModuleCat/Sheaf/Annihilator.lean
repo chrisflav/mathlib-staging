@@ -6,10 +6,9 @@ Authors: Christian Merten
 module
 
 public import MathlibStaging.Init
-public import Mathlib.Algebra.Category.Grp.ForgetCorepresentable
 public import MathlibStaging.Algebra.Category.ModuleCat.Presheaf.Submodule
+public import MathlibStaging.Algebra.Category.ModuleCat.Sheaf.Submodule
 public import Mathlib.Algebra.Category.ModuleCat.Sheaf
-public import Mathlib.CategoryTheory.Sites.Subsheaf
 public import Mathlib.RingTheory.Ideal.Maps
 
 /-!
@@ -34,15 +33,13 @@ monomorphism into `unit R`.
   submodules of `unit R`, stable under restriction.
 - `PresheafOfModules.annihilator M`: the annihilator as a sub-presheaf of modules
   of `unit R`, with inclusion `PresheafOfModules.annihilatorι M`.
-- `SheafOfModules.ofLocalSubmodule`: a submodule of (the underlying presheaf of
-  modules of) a sheaf of modules whose membership is local is a sheaf of modules.
 - `SheafOfModules.annihilator M`: the annihilator as a sheaf of modules, with
   inclusion `SheafOfModules.annihilatorι M`.
 -/
 
 @[expose] public section
 
-universe v v₁ u₁ u w
+universe v v₁ u₁ u
 
 open CategoryTheory Opposite
 
@@ -109,21 +106,6 @@ lemma annihilatorIdeal_le_of_surjective {M N : PresheafOfModules.{v} R} (f : M �
 
 end PresheafOfModules
 
-namespace CategoryTheory.Presheaf
-
-variable {C : Type u₁} [Category.{v₁} C] {J : GrothendieckTopology C}
-
-/-- The underlying type-valued presheaf of an `AddCommGrpCat`-valued sheaf is a sheaf of types.
-This holds at any universe `w`, since the forgetful functor of `AddCommGrpCat.{w}` is
-corepresentable (by `ULift.{w} ℤ`); in particular it does not require `w = max v₁ u₁`. -/
-lemma isSheaf_comp_forget {A : Cᵒᵖ ⥤ AddCommGrpCat.{w}}
-    (h : Presheaf.IsSheaf J A) :
-    Presieve.IsSheaf J (A ⋙ forget AddCommGrpCat.{w}) :=
-  Presieve.isSheaf_iso J (Functor.isoWhiskerLeft A AddCommGrpCat.coyonedaObjIsoForget)
-    (h (AddCommGrpCat.of (ULift.{w} ℤ)))
-
-end CategoryTheory.Presheaf
-
 namespace SheafOfModules
 
 open PresheafOfModules CategoryTheory.Presheaf
@@ -131,46 +113,14 @@ open PresheafOfModules CategoryTheory.Presheaf
 variable {C : Type u₁} [Category.{v₁} C] {J : GrothendieckTopology C}
 
 variable
-  [J.HasSheafCompose (forget₂ RingCat.{max v₁ u₁} AddCommGrpCat.{max v₁ u₁})]
-  {R : Sheaf J RingCat.{max v₁ u₁}}
-
-/-- A submodule `N` of (the underlying presheaf of modules of) a sheaf of modules `P` whose
-membership is *local* is itself a sheaf of modules: if a section `s` restricts into `N` along a
-covering sieve, then `s` already lies in `N`.
-
-This is the general glue between `PresheafOfModules.Submodule` and `SheafOfModules`; the actual
-mathematical content of any particular instance is the locality hypothesis `hlocal`. -/
-noncomputable def ofLocalSubmodule (P : SheafOfModules.{max v₁ u₁} R) (N : P.val.Submodule)
-    (hlocal : ∀ ⦃X : Cᵒᵖ⦄ (s : P.val.obj X) (S : Sieve X.unop), S ∈ J X.unop →
-      (∀ ⦃Y : C⦄ (f : Y ⟶ X.unop), S f → P.val.map f.op s ∈ N.obj (op Y)) → s ∈ N.obj X) :
-    SheafOfModules.{max v₁ u₁} R where
-  val := N.toPresheafOfModules
-  isSheaf := by
-    -- The underlying type-valued presheaf of `P`, which is a sheaf. The forgetful functor must
-    -- be qualified here, as `forget` would otherwise resolve to `SheafOfModules.forget`.
-    let F : Cᵒᵖ ⥤ Type (max v₁ u₁) :=
-      P.val.presheaf ⋙ CategoryTheory.forget AddCommGrpCat.{max v₁ u₁}
-    have hF : Presieve.IsSheaf J F := isSheaf_comp_forget P.isSheaf
-    -- `N` as a subfunctor of `F`.
-    let G : Subfunctor F :=
-      { obj := fun X ↦ { r : P.val.obj X | r ∈ N.obj X }
-        map := fun {U V} i r hr ↦ N.map_mem i hr }
-    -- `G` is a sheaf: it is closed under the topology, which is exactly locality.
-    have hG : Presieve.IsSheaf J G.toFunctor := by
-      rw [G.isSheaf_iff hF]
-      intro U s hs
-      exact hlocal s (G.sieveOfSection s) hs fun _ _ hf ↦ hf
-    -- Transfer the sheaf condition back to `N.toPresheafOfModules.presheaf`.
-    rw [Presheaf.isSheaf_iff_isSheaf_forget (J := J)
-        (s := CategoryTheory.forget AddCommGrpCat.{max v₁ u₁}),
-      isSheaf_iff_isSheaf_of_type]
-    exact Presieve.isSheaf_iso J (NatIso.ofComponents (fun _ ↦ Iso.refl _) (by cat_disch)) hG
+  [J.HasSheafCompose (forget₂ RingCat.{u} AddCommGrpCat.{u})]
+  {R : Sheaf J RingCat.{u}}
 
 variable (M : SheafOfModules.{v} R)
 
 /-- The annihilator of a sheaf of modules `M`, as a sheaf of modules: a subobject of
 `unit R` whose sections over `X` are those `r : R.obj X` annihilating `M` locally. -/
-noncomputable def annihilator : SheafOfModules.{max v₁ u₁} R :=
+noncomputable def annihilator : SheafOfModules.{u} R :=
   (SheafOfModules.unit R).ofLocalSubmodule M.val.annihilatorSystem <| by
     -- `M.val` is separated, as the underlying type-valued presheaf of a sheaf.
     have hsep : Presieve.IsSheaf J (M.val.presheaf ⋙ CategoryTheory.forget AddCommGrpCat.{v}) :=
