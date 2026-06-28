@@ -24,14 +24,29 @@ theorem Module.Flat.trans_compHom {R S : Type*} [CommRing R] [CommRing S] (φ : 
   have : Module.Flat R S := hφ
   exact Module.Flat.trans R S M
 
+/-- If the algebra map `R → S` is bijective, then an `S`-module `M` is flat over `R` (via the tower)
+iff it is flat over `S`. -/
+theorem Module.Flat.iff_of_bijective_algebraMap {R S : Type*} [CommRing R] [CommRing S]
+    [Algebra R S] (hb : Function.Bijective (algebraMap R S)) (M : Type*) [AddCommGroup M]
+    [Module R M] [Module S M] [IsScalarTower R S M] :
+    Module.Flat R M ↔ Module.Flat S M := by
+  let e : R ≃+* S := RingEquiv.ofBijective (algebraMap R S) hb
+  refine ⟨fun hM ↦ ?_, fun hM ↦ ?_⟩
+  · letI : Algebra S R := e.symm.toRingHom.toAlgebra
+    haveI : IsScalarTower S R M := IsScalarTower.of_algebraMap_smul fun s x ↦ by
+      have h : (algebraMap R S) (e.symm s) = s := e.apply_symm_apply s
+      rw [show algebraMap S R s = e.symm s from rfl, ← algebraMap_smul (A := S) (e.symm s) x, h]
+    haveI : Module.Flat S R := RingHom.Flat.of_bijective (f := e.symm.toRingHom) e.symm.bijective
+    exact Module.Flat.trans S R M
+  · haveI : Module.Flat R S :=
+      Module.Flat.of_linearEquiv (LinearEquiv.ofBijective (Algebra.linearMap R S) hb).symm
+    exact Module.Flat.trans R S M
+
 /-- Restricting scalars along a bijective ring homomorphism preserves and reflects flatness. -/
 theorem Module.Flat.compHom_bijective_iff {R S : Type*} [CommRing R] [CommRing S] (φ : R →+* S)
     (hφ : Function.Bijective φ) {M : Type*} [AddCommGroup M] [Module S M] :
     (letI := Module.compHom M φ; Module.Flat R M) ↔ Module.Flat S M := by
-  refine ⟨fun hM ↦ ?_, fun hM ↦ Module.Flat.trans_compHom φ (.of_bijective hφ) hM⟩
+  letI := φ.toAlgebra
   letI := Module.compHom M φ
-  let e : R ≃+* S := RingEquiv.ofBijective φ hφ
-  have key := Module.Flat.trans_compHom e.symm.toRingHom (.of_bijective e.symm.bijective) hM
-  have h : (inferInstanceAs (Module S M)) = Module.compHom M e.symm.toRingHom :=
-    Module.ext' _ _ fun s m ↦ (congrArg (· • m) (e.apply_symm_apply s)).symm
-  rwa [← h] at key
+  haveI : IsScalarTower R S M := IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
+  exact Module.Flat.iff_of_bijective_algebraMap hφ M

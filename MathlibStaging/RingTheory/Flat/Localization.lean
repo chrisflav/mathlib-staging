@@ -28,24 +28,14 @@ theorem Module.Flat.localizedModule_base {R S : Type*} [CommRing R] [CommRing S]
   have : Module.Flat R (Localization q ⊗[S] M) := Module.Flat.tensor_tower (Localization q) M
   exact Module.Flat.of_linearEquiv e
 
-/-- **Local–global flatness over a base, indexed by primes of `S`.** For an `R`-algebra `S` and an
-`S`-module `M`, `M` is flat over `R` iff its localization at every prime of `S` is flat over `R`. -/
-theorem Module.flat_iff_forall_localizedModule_prime_of_algebra {R S : Type*} [CommRing R]
+/-- **Local–global flatness over a base, indexed by maximal ideals of `S`.** For an `R`-algebra `S`
+and an `S`-module `M`, `M` is flat over `R` iff its localization at every maximal ideal of `S` is
+flat over `R`. -/
+theorem Module.flat_iff_forall_localizedModule_maximal_of_algebra {R S : Type*} [CommRing R]
     [CommRing S] [Algebra R S] (M : Type*) [AddCommGroup M] [Module R M] [Module S M]
     [IsScalarTower R S M] :
     Module.Flat R M ↔
-      ∀ (q : Ideal S) [q.IsPrime], Module.Flat R (LocalizedModule q.primeCompl M) := by
+      ∀ (q : Ideal S) [q.IsMaximal], Module.Flat R (LocalizedModule q.primeCompl M) := by
   refine ⟨fun _ q _ ↦ Module.Flat.localizedModule_base M q.primeCompl, fun h ↦ ?_⟩
-  refine Module.flat_of_isLocalized_maximal S M (fun P _ ↦ LocalizedModule P.primeCompl M)
-    (fun P _ ↦ LocalizedModule.mkLinearMap P.primeCompl M) fun P hP ↦ ?_
-  have := hP.isPrime
-  exact h P
-
-/-- A module `N` over a commutative ring `R` is flat if and only if its localization at every
-prime ideal is flat over `R`. This is the special case of
-`Module.flat_iff_forall_localizedModule_prime_of_algebra` for `S := R`. -/
-theorem Module.flat_iff_forall_localizedModule_prime (R : Type*) [CommRing R] (N : Type*)
-    [AddCommGroup N] [Module R N] :
-    Module.Flat R N ↔
-      ∀ (p : Ideal R) [p.IsPrime], Module.Flat R (LocalizedModule p.primeCompl N) :=
-  Module.flat_iff_forall_localizedModule_prime_of_algebra (S := R) N
+  exact Module.flat_of_isLocalized_maximal S M (fun P _ ↦ LocalizedModule P.primeCompl M)
+    (fun P _ ↦ LocalizedModule.mkLinearMap P.primeCompl M) fun P _ ↦ h P

@@ -130,7 +130,7 @@ of the underlying ring homomorphisms of the stalk maps. -/
 lemma stalkMap_comp_hom {X Y Z : Scheme.{u}} (f : X ⟶ Y) (g : Y ⟶ Z) (x : X) :
     ((f ≫ g).stalkMap x).hom = (f.stalkMap x).hom.comp (g.stalkMap (f.base x)).hom := by
   rw [Scheme.Hom.stalkMap_comp]
-  rfl
+  exact CommRingCat.hom_comp _ _
 
 /-- **Transitivity along a flat base.** If a sheaf of modules `F` on `X` is flat over `Y` via
 `f : X ⟶ Y`, and `g : Y ⟶ Z` is a flat morphism of schemes, then `F` is flat over `Z` via the
@@ -220,10 +220,12 @@ theorem flat_tilde_iff_of_algebra {R S : CommRingCat.{u}} (f : R ⟶ S) (M : Mod
   letI := f.hom.toAlgebra
   letI : Module R M := Module.compHom M f.hom
   have : IsScalarTower R S M := IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
-  rw [flat_iff_forall_flatAt,
-    Module.flat_iff_forall_localizedModule_prime_of_algebra (R := R) (S := S) (M := M)]
-  refine ⟨fun h q _ ↦ (flatAt_tilde_algebra_iff f M ⟨q, ‹_›⟩).mp (h ⟨q, ‹_›⟩),
-    fun h x ↦ (flatAt_tilde_algebra_iff f M x).mpr (h x.asIdeal)⟩
+  rw [flat_iff_forall_flatAt]
+  refine ⟨fun h ↦ (Module.flat_iff_forall_localizedModule_maximal_of_algebra (R := R) (S := S)
+      (M := M)).mpr fun q _ ↦ (flatAt_tilde_algebra_iff f M ⟨q, inferInstance⟩).mp
+        (h ⟨q, inferInstance⟩),
+    fun hM x ↦ (flatAt_tilde_algebra_iff f M x).mpr
+      (Module.Flat.localizedModule_base M x.asIdeal.primeCompl)⟩
 
 /-- **The affine case.** For a commutative ring `R` and an `R`-module `M`, the quasi-coherent
 sheaf `M^~` on `Spec R` is flat over `Spec R` (via the identity morphism) if and only if `M` is a
