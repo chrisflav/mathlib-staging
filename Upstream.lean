@@ -390,6 +390,52 @@ def vizDot (graph : NameMap (Array Name)) (prOf : Name → Option Nat) : String 
   lines := lines.push "}"
   return String.intercalate "\n" lines.toList
 
+/-- A Verso blueprint label for a node: its name with every non-alphanumeric
+character replaced by `_`. -/
+def sanitizeLabel (n : Name) : String :=
+  String.ofList (n.toString.toList.map fun c => if c.isAlphanum || c == '_' then c else '_')
+
+/-- The graph as a Verso blueprint chapter (`#doc`): one `:::definition` node per
+unit, with `{uses …}` edges for its staging dependencies. Verso renders these as a
+graph and colours each node by status — a node with no staging dependencies is
+*ready* (blue, directly upstreamable); one that depends on other staging
+declarations is *blocked* (amber) — which matches our upstreaming model. -/
+def vizVerso (kind : String) (graph : NameMap (Array Name)) (prOf : Name → Option Nat) : String :=
+  Id.run do
+  let metrics := allMetrics graph
+  -- Assign each node a unique, readable label.
+  let mut labelOf : NameMap String := {}
+  let mut used : Array String := #[]
+  for (n, _) in graph do
+    let base := let b := sanitizeLabel n; if b.isEmpty then "node" else b
+    let mut lbl := base
+    let mut i := 2
+    while used.contains lbl do
+      lbl := base ++ "_" ++ toString i
+      i := i + 1
+    used := used.push lbl
+    labelOf := labelOf.insert n lbl
+  let header :=
+    "import Verso\nimport VersoManual\nimport VersoBlueprint\n\n\
+     open Verso.Genre\nopen Verso.Genre.Manual\nopen Informal\n\n\
+     #doc (Manual) \"Staging dependency graph (" ++ kind ++ ")\" =>\n\n\
+     Staging-internal dependency graph of `MathlibStaging` " ++ kind ++ ". \
+     Nodes with no staging dependencies are *ready* (directly upstreamable); nodes \
+     depending on other staging declarations are *blocked* until those land upstream.\n"
+  let mut blocks := #[header]
+  for (n, deps) in graph do
+    let lbl := (labelOf.find? n).getD "node"
+    let m := (metrics.find? n).getD default
+    let prNote := match prOf n with | some p => s!", in mathlib PR #{p}" | none => ""
+    let usesLine :=
+      if deps.isEmpty then ""
+      else "\n" ++ String.intercalate " "
+        (deps.filterMap fun d => (labelOf.find? d).map fun dl => "{uses \"" ++ dl ++ "\"}[]").toList
+    blocks := blocks.push <|
+      ":::definition \"" ++ lbl ++ "\"\n`" ++ n.toString ++ "` — depth " ++ toString m.depth ++
+      ", " ++ toString m.trans.size ++ " transitive staging deps" ++ prNote ++ "." ++ usesLine ++ "\n:::"
+  return String.intercalate "\n\n" blocks.toList ++ "\n"
+
 /-- Implementation of `lake exe upstream viz`. -/
 def runViz (p : Parsed) : IO UInt32 := do
   let decls := p.hasFlag "decls"
@@ -406,10 +452,12 @@ def runViz (p : Parsed) : IO UInt32 := do
       let ctx : Core.Context := { options := {}, fileName := "<upstream>", fileMap := default }
       let graph ← Prod.fst <$> CoreM.toIO (stagingDeclGraph env) ctx { env }
       pure <| if fmt == "dot" then vizDot graph prOf
+        else if fmt == "verso" then vizVerso "declarations" graph prOf
         else (vizJson "decls" graph (fun n => (env.getModuleFor? n).getD .anonymous) prOf).pretty
     else
       let graph := stagingFileGraph env
       pure <| if fmt == "dot" then vizDot graph (fun _ => none)
+        else if fmt == "verso" then vizVerso "files" graph (fun _ => none)
         else (vizJson "files" graph id (fun _ => none)).pretty
   match out? with
   | some f => IO.FS.writeFile f output; IO.println s!"wrote {f}"
@@ -450,7 +498,7 @@ def vizCmd : Cmd := `[Cli|
 
   FLAGS:
     decls;             "Graph individual declarations instead of whole files."
-    "format" : String; "Output format, `json` (default) or `dot`."
+    "format" : String; "Output format: `json` (default), `dot`, or `verso` (a blueprint chapter)."
     "out" : String;    "Write to this file instead of stdout."
 ]
 

@@ -1,0 +1,89 @@
+name: Verso upstreaming dashboard
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    paths:
+      - "MathlibStaging/**"
+      - "Upstream.lean"
+      - "blueprint-verso/**"
+      - ".github/workflows/verso-blueprint.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.repository }}-verso-blueprint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install elan
+        run: |
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      # --- Generate the graph chapter from the main library (Lean v4.32.0-rc1). ---
+      - name: Cache main-repo Lake packages
+        uses: actions/cache@v4
+        with:
+          path: .lake/packages
+          key: ${{ runner.os }}-lake-main-${{ hashFiles('lean-toolchain', 'lake-manifest.json') }}
+
+      - name: Get mathlib build cache
+        run: lake exe cache get || true
+
+      - name: Generate the graph chapter
+        run: |
+          lake build MathlibStaging upstream
+          lake exe upstream viz --decls --format verso \
+            --out blueprint-verso/UpstreamingBlueprint/Chapters/Graph.lean
+
+      # --- Build the Verso site (Lean v4.31.0). ---
+      - name: Cache blueprint Lake packages
+        uses: actions/cache@v4
+        with:
+          path: blueprint-verso/.lake/packages
+          key: ${{ runner.os }}-lake-blueprint-${{ hashFiles('blueprint-verso/lean-toolchain', 'blueprint-verso/lake-manifest.json') }}
+
+      - name: Cache blueprint build
+        uses: actions/cache@v4
+        with:
+          path: blueprint-verso/.lake/build
+          key: ${{ runner.os }}-build-blueprint-${{ hashFiles('blueprint-verso/lean-toolchain', 'blueprint-verso/lake-manifest.json', 'blueprint-verso/**/*.lean') }}
+
+      - name: Build blueprint site
+        run: ./blueprint-verso/scripts/ci-pages.sh
+
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: verso-dashboard
+          path: blueprint-verso/_out/site/html-multi
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: verso-dashboard
+          path: site
+      # Publish to the `gh-pages` branch under `dashboard/`, so it coexists with
+      # any other GitHub Pages content (e.g. the API docs) on the same site.
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: site
+          target-folder: dashboard
+          clean: true
+          clean-exclude: |
+            !dashboard/**

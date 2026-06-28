@@ -1,0 +1,27 @@
+name = "UpstreamingBlueprint"
+defaultTargets = ["UpstreamingBlueprint"]
+
+# This is a self-contained Lake package, separate from the top-level
+# `mathlib-staging` library, with its own `lean-toolchain`. It renders the
+# upstreaming dependency graph as a Verso blueprint site.
+#
+# It deliberately does NOT depend on the `MathlibStaging` library: verso-blueprint
+# is pinned to Lean v4.31.0 while the main library tracks mathlib master
+# (v4.32.0-rc1), so a `path = ".."` dependency would force a toolchain clash.
+# Instead the graph data is produced by `lake exe upstream viz` in the main repo
+# and consumed here as JSON.
+
+[leanOptions]
+experimental.module = true
+
+[[require]]
+name = "VersoBlueprint"
+git = "https://github.com/leanprover/verso-blueprint"
+rev = "v4.31.0"
+
+[[lean_lib]]
+name = "UpstreamingBlueprint"
+
+[[lean_exe]]
+name = "blueprint-gen"
+root = "UpstreamingBlueprintMain"
