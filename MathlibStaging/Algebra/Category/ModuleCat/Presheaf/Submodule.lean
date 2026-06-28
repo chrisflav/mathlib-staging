@@ -24,6 +24,9 @@ we construct the corresponding subobject of `M` in the category
   presheaf of modules.
 * `PresheafOfModules.Submodule.ι`: the inclusion into `M`, a monomorphism.
 
+The families of submodules of `M` form a `CompleteLattice`, with all the lattice
+operations computed pointwise.
+
 -/
 
 @[expose] public section
@@ -92,6 +95,89 @@ instance : Mono N.ι := mono_of_injective N.ι_app_injective
 lemma mem_iff {X : Cᵒᵖ} (m : M.obj X) :
     (∃ n : N.toSubmodule X, (N.ι).app X n = m) ↔ m ∈ N.toSubmodule X :=
   ⟨fun ⟨n, hn⟩ ↦ hn ▸ n.property, fun hm ↦ ⟨⟨m, hm⟩, rfl⟩⟩
+
+section Lattice
+
+instance : PartialOrder M.Submodule :=
+  PartialOrder.lift (fun N : M.Submodule ↦ N.toSubmodule) fun _ _ h ↦ ext (congrFun h)
+
+/-- `M.map f` sends the supremum `⨆ N ∈ s, N.toSubmodule X` into `⨆ N ∈ s, N.toSubmodule Y`,
+as every member of the family is stable under restriction. -/
+private lemma map_mem_biSup {X Y : Cᵒᵖ} (f : X ⟶ Y) (s : Set M.Submodule) {m : M.obj X}
+    (hm : m ∈ ⨆ N ∈ s, N.toSubmodule X) :
+    M.map f m ∈ ⨆ N ∈ s, N.toSubmodule Y := by
+  induction hm using Submodule.iSup_induction with
+  | mem N y hy =>
+    induction hy using Submodule.iSup_induction with
+    | mem hN z hz =>
+      exact Submodule.mem_iSup_of_mem N (Submodule.mem_iSup_of_mem hN (N.map_mem f hz))
+    | zero =>
+      have h : M.map f (0 : M.obj X) = 0 := map_zero (M.map f).hom
+      rw [h]
+      exact zero_mem _
+    | add a b ha hb =>
+      have h : M.map f (a + b) = M.map f a + M.map f b := map_add (M.map f).hom a b
+      rw [h]
+      exact add_mem ha hb
+  | zero =>
+    have h : M.map f (0 : M.obj X) = 0 := map_zero (M.map f).hom
+    rw [h]
+    exact zero_mem _
+  | add a b ha hb =>
+    have h : M.map f (a + b) = M.map f a + M.map f b := map_add (M.map f).hom a b
+    rw [h]
+    exact add_mem ha hb
+
+@[simps! top_toSubmodule bot_toSubmodule sup_toSubmodule inf_toSubmodule
+  sInf_toSubmodule sSup_toSubmodule]
+instance : CompleteLattice M.Submodule where
+  sup N₁ N₂ :=
+    { toSubmodule X := N₁.toSubmodule X ⊔ N₂.toSubmodule X
+      map_mem := by
+        intro X Y f m hm
+        obtain ⟨a, ha, b, hb, rfl⟩ := Submodule.mem_sup.mp hm
+        have h : M.map f (a + b) = M.map f a + M.map f b := map_add (M.map f).hom a b
+        rw [h]
+        exact Submodule.add_mem_sup (N₁.map_mem f ha) (N₂.map_mem f hb) }
+  le_sup_left _ _ _ := by simp
+  le_sup_right _ _ _ := by simp
+  sup_le _ _ _ h₁ h₂ X := by simp [h₁ X, h₂ X]
+  inf N₁ N₂ :=
+    { toSubmodule X := N₁.toSubmodule X ⊓ N₂.toSubmodule X
+      map_mem := by
+        intro X Y f m hm
+        exact ⟨N₁.map_mem f hm.1, N₂.map_mem f hm.2⟩ }
+  inf_le_left _ _ _ _ h := h.1
+  inf_le_right _ _ _ _ h := h.2
+  le_inf _ _ _ h₁ h₂ _ _ h := ⟨h₁ _ h, h₂ _ h⟩
+  sSup s :=
+    { toSubmodule X := ⨆ N ∈ s, N.toSubmodule X
+      map_mem := by
+        intro X Y f m hm
+        exact map_mem_biSup f s hm }
+  isLUB_sSup _ := ⟨fun a ha X ↦ le_iSup₂_of_le a ha le_rfl, fun _ _ _ ↦ by aesop⟩
+  sInf s :=
+    { toSubmodule X := ⨅ N ∈ s, N.toSubmodule X
+      map_mem := by
+        intro X Y f m hm
+        simp only [Submodule.mem_iInf] at hm ⊢
+        exact fun N hN ↦ N.map_mem f (hm N hN) }
+  isGLB_sInf _ := ⟨fun _ _ _ _ ↦ by aesop, fun _ _ _ ↦ by aesop⟩
+  bot := { toSubmodule _ := ⊥
+           map_mem := by
+             intro X Y f m hm
+             obtain rfl : m = 0 := Submodule.mem_bot.mp hm
+             have h : M.map f (0 : M.obj X) = 0 := map_zero (M.map f).hom
+             rw [h]
+             exact Submodule.zero_mem _ }
+  bot_le _ _ := bot_le
+  top := { toSubmodule _ := ⊤
+           map_mem := by
+             intro X Y f m _
+             exact Submodule.mem_top }
+  le_top _ _ := le_top
+
+end Lattice
 
 end Submodule
 
