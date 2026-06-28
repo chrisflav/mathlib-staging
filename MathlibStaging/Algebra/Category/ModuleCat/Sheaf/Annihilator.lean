@@ -31,7 +31,7 @@ monomorphism into `unit R`.
 - `PresheafOfModules.annihilatorIdeal M X`: the annihilator ideal of `M` at `X`.
 - `PresheafOfModules.annihilator M`: the annihilator as a submodule of `unit R`.
 - `SheafOfModules.annihilator M`: the annihilator as a submodule of `unit R` in the sense of
-  `SheafOfModules.Submodule`, with inclusion `SheafOfModules.annihilatorι M`.
+  `SheafOfModules.Submodule`, with inclusion `M.annihilator.ι` into `unit R`.
 -/
 
 @[expose] public section
@@ -126,13 +126,5 @@ noncomputable def annihilator : (SheafOfModules.unit R).Submodule where
     have : M.val.map f.op (R.obj.map φ s • m) = M.val.map f.op 0 := by
       rw [map_zero, M.val.map_smul, ← RingCat.comp_apply, ← R.obj.map_comp, h0]
     exact this
-
-/-- The inclusion of the annihilator of `M` into `unit R`. -/
-noncomputable def annihilatorι : M.annihilator.toSheafOfModules ⟶ unit R :=
-  ⟨M.val.annihilator.ι⟩
-
-instance : Mono M.annihilatorι := by
-  have : Mono ((forget R).map M.annihilatorι) := inferInstanceAs (Mono M.val.annihilator.ι)
-  exact (forget R).mono_of_mono_map this
 
 end SheafOfModules

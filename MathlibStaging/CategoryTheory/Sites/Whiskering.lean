@@ -23,11 +23,7 @@ variable {C : Type u₁} [Category.{v₁} C] {A : Type u} [Category.{v} A]
   {FA : A → A → Type*} {CA : A → Type v} [∀ X Y, FunLike (FA X Y) (CA X) (CA Y)]
   [ConcreteCategory A FA] (J : GrothendieckTopology C)
 
-/-- If the forgetful functor of a concrete category `A` is corepresentable, then composing an
-`A`-valued sheaf with the forgetful functor yields a sheaf of types, i.e. `J.HasSheafCompose`
-holds for `forget A`. Unlike `hasSheafCompose_of_preservesLimitsOfSize`, this imposes no
-restriction on the universe of the target. -/
-instance hasSheafCompose_forget_of_isCorepresentable [(forget A).IsCorepresentable] :
+instance [(forget A).IsCorepresentable] :
     J.HasSheafCompose (forget A) where
   isSheaf P hP := by
     rw [isSheaf_iff_isSheaf_of_type]
