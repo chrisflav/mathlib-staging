@@ -1,0 +1,85 @@
+name: GitHub Pages (docs + dashboard)
+
+# Builds the API documentation and the Verso upstreaming dashboard and publishes
+# them together to GitHub Pages: the docs at `/docs` and the dashboard at
+# `/dashboard`. They share a single GitHub Pages deployment (only one is allowed
+# per repository), so this is the only workflow that deploys to Pages.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/configure-pages@v5
+
+      # --- API documentation (build only; deployment happens together below). ---
+      - name: Build API documentation
+        uses: leanprover-community/docgen-action@v1
+        with:
+          deploy: false
+
+      # --- Dashboard: generate the graph chapter (Lean v4.32.0-rc1), then build
+      #     the Verso site (Lean v4.31.0). elan selects the toolchain per directory. ---
+      - name: Install elan
+        run: |
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Get mathlib build cache
+        run: lake exe cache get || true
+
+      - name: Generate the graph chapter
+        run: |
+          lake build MathlibStaging upstream
+          lake exe upstream viz --decls --format verso \
+            --out dashboard/UpstreamingBlueprint/Chapters/Graph.lean
+
+      - name: Build dashboard site
+        run: ./dashboard/scripts/ci-pages.sh
+
+      # --- Assemble the combined site: docs at /docs, dashboard at /dashboard. ---
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          # docgen-action leaves the built API docs under `docs/` (served at /docs).
+          if [ -d docs ]; then cp -r docs/. _site/; fi
+          mkdir -p _site/dashboard
+          cp -r dashboard/_out/site/html-multi/. _site/dashboard/
+          cat > _site/index.html <<'HTML'
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>mathlib-staging</title>
+          <h1>mathlib-staging</h1>
+          <ul>
+            <li><a href="docs/">API documentation</a></li>
+            <li><a href="dashboard/">Upstreaming dashboard</a></li>
+          </ul>
+          HTML
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
