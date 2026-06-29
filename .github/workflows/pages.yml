@@ -2,12 +2,8 @@ name: GitHub Pages (docs + dashboard)
 
 # Publishes the API documentation and the Verso upstreaming dashboard together to
 # GitHub Pages: a landing page at `/`, the API docs at `/docs`, and the dashboard
-# at `/dashboard`.
-#
-# GitHub Pages allows only one deployment per repository, and docgen-action always
-# uploads (and, with `deploy` on, deploys) its output directory `docs/`. So rather
-# than deploy separately, we build the dashboard first and drop it into `docs/`,
-# and let docgen-action perform the single upload + deploy of everything.
+# at `/dashboard`. GitHub Pages allows only one deployment per repository, so this
+# is the only workflow that deploys, uploading a single combined artifact.
 
 on:
   push:
@@ -27,33 +23,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/configure-pages@v5
 
-      # elan provides the `lake` shim used both by the dashboard build below and
-      # by docgen-action's doc build, so install it first.
+      # elan provides the `lake` shim used by docgen-action's doc build and the
+      # dashboard build, so install it first.
       - name: Install elan
         run: |
           curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
+      # Build the API docs only. We pin docgen-action past its `v1` tag because
+      # only newer revisions honour `deploy: false` (`v1` uploads and deploys
+      # unconditionally); `build-page: false` skips its Jekyll homepage step. We
+      # assemble and deploy the combined site ourselves below.
+      - name: Build API documentation
+        uses: leanprover-community/docgen-action@10db47458f91456d87804787d3dfcd914b9a19e3
+        with:
+          deploy: false
+          build-page: false
+
+      # Build the dashboard: generate the chapter (Lean v4.32.0-rc1) and the Verso
+      # site (Lean v4.31.0). elan selects the toolchain per directory.
       - name: Get mathlib build cache
         run: lake exe cache get || true
-
-      # Build the dashboard (generate the chapter with Lean v4.32.0-rc1, build the
-      # Verso site with v4.31.0) and drop it into docgen's output dir so it ships
-      # alongside the API docs in the single deployment.
-      - name: Build dashboard into docs/dashboard
+      - name: Build dashboard site
         run: |
           lake build MathlibStaging upstream
           lake exe upstream viz --decls --format verso \
             --out dashboard/UpstreamingBlueprint/Chapters/Graph.lean
           ./dashboard/scripts/ci-pages.sh
-          mkdir -p docs/dashboard
-          cp -r dashboard/_out/site/html-multi/. docs/dashboard/
-          cat > docs/index.html <<'HTML'
+
+      # Assemble the combined site: landing at /, docs at /docs, dashboard at /dashboard.
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          # docgen-action leaves the built API docs under `docs/` (i.e. docs/docs).
+          if [ -d docs ]; then cp -r docs/. _site/; fi
+          mkdir -p _site/dashboard
+          cp -r dashboard/_out/site/html-multi/. _site/dashboard/
+          cat > _site/index.html <<'HTML'
           <!doctype html>
           <meta charset="utf-8">
           <title>mathlib-staging</title>
@@ -64,9 +76,16 @@ jobs:
           </ul>
           HTML
 
-      # docgen-action builds the API docs into `docs/docs`, then uploads and
-      # deploys the whole `docs/` directory (landing page + API docs + dashboard).
-      - name: Build docs and deploy to GitHub Pages
-        uses: leanprover-community/docgen-action@v1
+      - uses: actions/upload-pages-artifact@v3
         with:
-          build-page: false
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
