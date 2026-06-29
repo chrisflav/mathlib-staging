@@ -17,8 +17,7 @@ public import Mathlib.RingTheory.Ideal.Maps
 Given a sheaf of modules `M` over a sheaf of rings `R`, we define the
 annihilator `SheafOfModules.annihilator M`, a subsheaf of modules of the
 unit `unit R`. Its sections over `X` are the sections `r` of `R` whose restriction along
-every `f : X ⟶ Y`
-annihilates `M.obj Y`. Equivalently, this is the kernel of the action of `R`
+every `f : X ⟶ Y` annihilates `M.obj Y`. Equivalently, this is the kernel of the action of `R`
 on `M` computed in the internal hom; phrasing it via restrictions avoids relying
 on an internal hom for sheaves of modules.
 
@@ -74,6 +73,8 @@ variable {M}
 lemma mem_annihilator {X : Cᵒᵖ} (r : (unit R).obj X) :
     r ∈ M.annihilator.obj X ↔
       ∀ ⦃Y : Cᵒᵖ⦄ (f : X ⟶ Y) (m : M.obj Y), R.map f r • m = 0 :=
+  -- `Submodule.mem_iInf` only fires at the honest type `R.obj X`, so we characterise membership
+  -- there and apply it to `r` via the defeq `(unit R).obj X = R.obj X`
   have mem : ∀ (s : R.obj X),
       (s ∈ ⨅ (Y : Cᵒᵖ) (f : X ⟶ Y),
           (Module.annihilator (R.obj Y) (M.obj Y)).comap (R.map f).hom) ↔

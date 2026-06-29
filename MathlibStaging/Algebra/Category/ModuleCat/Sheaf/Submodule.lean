@@ -80,7 +80,9 @@ instance : Mono N.ι := by
 
 @[ext]
 lemma ext {N₁ N₂ : M.Submodule} (h : N₁.toSubmodule = N₂.toSubmodule) : N₁ = N₂ := by
-  cases N₁; cases N₂; congr
+  cases N₁
+  cases N₂
+  congr
 
 instance : PartialOrder M.Submodule :=
   PartialOrder.lift _ fun _ _ ↦ ext
@@ -94,9 +96,9 @@ instance : InfSet M.Submodule where
     { toSubmodule := sInf ((·.toSubmodule) '' s)
       isSheaf := fun X x hx ↦ by
         simp only [PresheafOfModules.Submodule.sInf_obj, Submodule.mem_iInf]
-        rintro _ ⟨N, hN, rfl⟩
-        refine N.isSheaf x (J.superset_covering (fun V f hf ↦ ?_) hx)
-        have h := sInf_le (Set.mem_image_of_mem (·.toSubmodule) hN)
+        rintro _ ⟨N', hN', rfl⟩
+        refine N'.isSheaf x (J.superset_covering (fun V f hf ↦ ?_) hx)
+        have h := sInf_le (Set.mem_image_of_mem (·.toSubmodule) hN')
         exact PresheafOfModules.Submodule.le_iff.mp h (op V) hf }
 
 /-- The submodules of a sheaf of modules form a complete lattice, induced from the complete lattice
@@ -104,7 +106,9 @@ of submodules of the underlying presheaf of modules via the local infima. -/
 noncomputable instance : CompleteLattice M.Submodule :=
   completeLatticeOfInf M.Submodule fun s ↦
     ⟨fun _ hN ↦ le_iff.mpr (sInf_le (Set.mem_image_of_mem _ hN)),
-      fun _ hb ↦ le_iff.mpr (le_sInf <| by rintro _ ⟨N, hN, rfl⟩; exact le_iff.mp (hb hN))⟩
+      fun _ hb ↦ le_iff.mpr <| le_sInf <| by
+        rintro _ ⟨N', hN', rfl⟩
+        exact le_iff.mp (hb hN')⟩
 
 end Submodule
 
