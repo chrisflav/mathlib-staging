@@ -1,9 +1,9 @@
 name: GitHub Pages (docs + dashboard)
 
-# Builds the API documentation and the Verso upstreaming dashboard and publishes
-# them together to GitHub Pages: the docs at `/docs` and the dashboard at
-# `/dashboard`. They share a single GitHub Pages deployment (only one is allowed
-# per repository), so this is the only workflow that deploys to Pages.
+# Publishes the API documentation and the Verso upstreaming dashboard together to
+# GitHub Pages: a landing page at `/`, the API docs at `/docs`, and the dashboard
+# at `/dashboard`. GitHub Pages allows only one deployment per repository, so this
+# is the only workflow that deploys, uploading a single combined artifact.
 
 on:
   push:
@@ -26,36 +26,39 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/configure-pages@v5
 
-      # --- API documentation (build only; deployment happens together below). ---
-      - name: Build API documentation
-        uses: leanprover-community/docgen-action@v1
-        with:
-          deploy: false
-
-      # --- Dashboard: generate the graph chapter (Lean v4.32.0-rc1), then build
-      #     the Verso site (Lean v4.31.0). elan selects the toolchain per directory. ---
+      # elan provides the `lake` shim used by docgen-action's doc build and the
+      # dashboard build, so install it first.
       - name: Install elan
         run: |
           curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
+      # Build the API docs only. We pin docgen-action past its `v1` tag because
+      # only newer revisions honour `deploy: false` (`v1` uploads and deploys
+      # unconditionally); `build-page: false` skips its Jekyll homepage step. We
+      # assemble and deploy the combined site ourselves below.
+      - name: Build API documentation
+        uses: leanprover-community/docgen-action@10db47458f91456d87804787d3dfcd914b9a19e3
+        with:
+          deploy: false
+          build-page: false
+
+      # Build the dashboard: generate the chapter (Lean v4.32.0-rc1) and the Verso
+      # site (Lean v4.31.0). elan selects the toolchain per directory.
       - name: Get mathlib build cache
         run: lake exe cache get || true
-
-      - name: Generate the graph chapter
+      - name: Build dashboard site
         run: |
           lake build MathlibStaging upstream
           lake exe upstream viz --decls --format verso \
             --out dashboard/UpstreamingBlueprint/Chapters/Graph.lean
+          ./dashboard/scripts/ci-pages.sh
 
-      - name: Build dashboard site
-        run: ./dashboard/scripts/ci-pages.sh
-
-      # --- Assemble the combined site: docs at /docs, dashboard at /dashboard. ---
+      # Assemble the combined site: landing at /, docs at /docs, dashboard at /dashboard.
       - name: Assemble site
         run: |
           mkdir -p _site
-          # docgen-action leaves the built API docs under `docs/` (served at /docs).
+          # docgen-action leaves the built API docs under `docs/` (i.e. docs/docs).
           if [ -d docs ]; then cp -r docs/. _site/; fi
           mkdir -p _site/dashboard
           cp -r dashboard/_out/site/html-multi/. _site/dashboard/
