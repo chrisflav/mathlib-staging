@@ -22,7 +22,7 @@ weak.linter.style.longFile = 1500
 name = "mathlib"
 scope = "leanprover-community"
 # Latest mathlib master commit (2026-06-28); the staging library tracks mathlib master.
-rev = "aaedc74a09fbe1da58b11cf4d27806a6fa1a86eb"
+rev = "35ab429f5240fa22c680dfc666e76b7406114151"
 
 [[lean_lib]]
 name = "MathlibStaging"
