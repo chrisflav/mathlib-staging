@@ -14,10 +14,10 @@ public import Mathlib.RingTheory.Ideal.Maps
 /-!
 # The annihilator ideal (pre)sheaf of a (pre)sheaf of modules
 
-Given a presheaf of modules `M` over a presheaf of rings `R`, we define the
-annihilator `PresheafOfModules.annihilator M`, a sub-presheaf of modules of the
-unit `unit R` (i.e. `R` viewed as a module over itself). Its sections over `X`
-are the sections `r` of `R` whose restriction along every `f : X ⟶ Y`
+Given a sheaf of modules `M` over a sheaf of rings `R`, we define the
+annihilator `SheafOfModules.annihilator M`, a subsheaf of modules of the
+unit `unit R`. Its sections over `X` are the sections `r` of `R` whose restriction along
+every `f : X ⟶ Y`
 annihilates `M.obj Y`. Equivalently, this is the kernel of the action of `R`
 on `M` computed in the internal hom; phrasing it via restrictions avoids relying
 on an internal hom for sheaves of modules.
@@ -43,15 +43,6 @@ namespace PresheafOfModules
 
 variable {C : Type u₁} [Category.{v₁} C] {R : Cᵒᵖ ⥤ RingCat.{u}} (M : PresheafOfModules.{v} R)
 
-/-- Membership in the annihilator `iInf`, characterised at the honest type `R.obj X`. This is the
-content of `mem_annihilator`; it is split out so that it can also be used in the construction of
-`annihilator` itself (where its sections do not yet have the `unit R` module structure attached). -/
-private lemma mem_annihilator_iInf {X : Cᵒᵖ} (r : R.obj X) :
-    r ∈ (⨅ (Y : Cᵒᵖ) (f : X ⟶ Y),
-        (Module.annihilator (R.obj Y) (M.obj Y)).comap (R.map f).hom) ↔
-      ∀ ⦃Y : Cᵒᵖ⦄ (f : X ⟶ Y) (m : M.obj Y), R.map f r • m = 0 := by
-  simp only [Submodule.mem_iInf, Ideal.mem_comap, Module.mem_annihilator]
-
 /-- The annihilator of a presheaf of modules `M`, as a submodule of `unit R`: its sections over
 `X` are those sections `r` of `R` annihilating `M` along every restriction. Over `X` it is the
 intersection over all `f : X ⟶ Y` of the pullbacks of the pointwise annihilators
@@ -62,16 +53,33 @@ noncomputable def annihilator : (unit R).Submodule where
   map {X Y} f := by
     intro r hr
     rw [Submodule.mem_comap, restrictₛₗ_apply]
-    refine (mem_annihilator_iInf M _).mpr fun Z g m ↦ ?_
-    have h := (mem_annihilator_iInf M _).mp hr (f ≫ g) m
+    -- characterise membership in the defining `iInf` at the honest type `R.obj _`
+    have mem : ∀ {W : Cᵒᵖ} (s : R.obj W),
+        (s ∈ ⨅ (Z : Cᵒᵖ) (g : W ⟶ Z),
+            (Module.annihilator (R.obj Z) (M.obj Z)).comap (R.map g).hom) ↔
+          ∀ ⦃Z : Cᵒᵖ⦄ (g : W ⟶ Z) (m : M.obj Z), R.map g s • m = 0 :=
+      fun s ↦ by simp only [Submodule.mem_iInf, Ideal.mem_comap, Module.mem_annihilator]
+    refine (mem _).mpr fun Z g m ↦ ?_
+    have h := (mem _).mp hr (f ≫ g) m
     rwa [R.map_comp, RingCat.comp_apply] at h
+
+@[simp]
+lemma annihilator_obj (X : Cᵒᵖ) :
+    M.annihilator.obj X = ⨅ (Y : Cᵒᵖ) (f : X ⟶ Y),
+      (Module.annihilator (R.obj Y) (M.obj Y)).comap (R.map f).hom :=
+  rfl
 
 variable {M}
 
 lemma mem_annihilator {X : Cᵒᵖ} (r : (unit R).obj X) :
     r ∈ M.annihilator.obj X ↔
       ∀ ⦃Y : Cᵒᵖ⦄ (f : X ⟶ Y) (m : M.obj Y), R.map f r • m = 0 :=
-  mem_annihilator_iInf M r
+  have mem : ∀ (s : R.obj X),
+      (s ∈ ⨅ (Y : Cᵒᵖ) (f : X ⟶ Y),
+          (Module.annihilator (R.obj Y) (M.obj Y)).comap (R.map f).hom) ↔
+        ∀ ⦃Y : Cᵒᵖ⦄ (f : X ⟶ Y) (m : M.obj Y), R.map f s • m = 0 :=
+    fun s ↦ by simp only [Submodule.mem_iInf, Ideal.mem_comap, Module.mem_annihilator]
+  mem r
 
 /-- The annihilator is antitone with respect to morphisms that are surjective on sections:
 if `f : M ⟶ N` is componentwise surjective, then everything annihilating `M` annihilates `N`. -/

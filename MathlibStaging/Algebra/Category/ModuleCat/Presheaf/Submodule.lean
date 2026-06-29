@@ -79,8 +79,7 @@ lemma toPresheafOfModules_map_apply {X Y : Cᵒᵖ} (f : X ⟶ Y) (m : N.obj X) 
     dsimp% ((N.toPresheafOfModules).map f m).val = M.map f m.val := by
   rfl
 
-/-- The subfunctor of the underlying type-valued presheaf of `M` cut out by `N`: its sections
-over `X` are the elements of `M.obj X` lying in `N.obj X`. -/
+/-- The subfunctor of the underlying type-valued presheaf of `M` induced by a submodule `N`. -/
 def toSubfunctor : Subfunctor (M.presheaf ⋙ CategoryTheory.forget AddCommGrpCat.{v}) where
   obj X := {r : M.obj X | r ∈ N.obj X}
   map := fun {_ _} f _ hr ↦ N.map_mem f hr
