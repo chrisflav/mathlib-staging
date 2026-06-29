@@ -7,7 +7,9 @@ name: GitHub Pages (docs + dashboard)
 
 on:
   push:
-    branches: [master]
+    # TEMPORARY: `fix-pages-deploy` is here so the combined site can be deployed
+    # and tested from this branch before merging. Remove it before merge.
+    branches: [master, fix-pages-deploy]
   workflow_dispatch:
 
 permissions:
@@ -26,6 +28,13 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/configure-pages@v5
 
+      # elan provides the `lake` shim that docgen-action's build script invokes
+      # (and that the dashboard build below uses), so it must be installed first.
+      - name: Install elan
+        run: |
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
       # --- API documentation (build only; deployment happens together below). ---
       - name: Build API documentation
         uses: leanprover-community/docgen-action@v1
@@ -34,11 +43,6 @@ jobs:
 
       # --- Dashboard: generate the graph chapter (Lean v4.32.0-rc1), then build
       #     the Verso site (Lean v4.31.0). elan selects the toolchain per directory. ---
-      - name: Install elan
-        run: |
-          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
-          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-
       - name: Get mathlib build cache
         run: lake exe cache get || true
 
