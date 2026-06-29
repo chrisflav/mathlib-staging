@@ -7,7 +7,7 @@ on:
     paths:
       - "MathlibStaging/**"
       - "Upstream.lean"
-      - "blueprint-verso/**"
+      - "dashboard/**"
       - ".github/workflows/verso-blueprint.yml"
   workflow_dispatch:
 
@@ -43,29 +43,29 @@ jobs:
         run: |
           lake build MathlibStaging upstream
           lake exe upstream viz --decls --format verso \
-            --out blueprint-verso/UpstreamingBlueprint/Chapters/Graph.lean
+            --out dashboard/UpstreamingBlueprint/Chapters/Graph.lean
 
       # --- Build the Verso site (Lean v4.31.0). ---
       - name: Cache blueprint Lake packages
         uses: actions/cache@v4
         with:
-          path: blueprint-verso/.lake/packages
-          key: ${{ runner.os }}-lake-blueprint-${{ hashFiles('blueprint-verso/lean-toolchain', 'blueprint-verso/lake-manifest.json') }}
+          path: dashboard/.lake/packages
+          key: ${{ runner.os }}-lake-blueprint-${{ hashFiles('dashboard/lean-toolchain', 'dashboard/lake-manifest.json') }}
 
       - name: Cache blueprint build
         uses: actions/cache@v4
         with:
-          path: blueprint-verso/.lake/build
-          key: ${{ runner.os }}-build-blueprint-${{ hashFiles('blueprint-verso/lean-toolchain', 'blueprint-verso/lake-manifest.json', 'blueprint-verso/**/*.lean') }}
+          path: dashboard/.lake/build
+          key: ${{ runner.os }}-build-blueprint-${{ hashFiles('dashboard/lean-toolchain', 'dashboard/lake-manifest.json', 'dashboard/**/*.lean') }}
 
       - name: Build blueprint site
-        run: ./blueprint-verso/scripts/ci-pages.sh
+        run: ./dashboard/scripts/ci-pages.sh
 
       - name: Upload site artifact
         uses: actions/upload-artifact@v4
         with:
           name: verso-dashboard
-          path: blueprint-verso/_out/site/html-multi
+          path: dashboard/_out/site/html-multi
 
   deploy:
     if: github.event_name != 'pull_request'
