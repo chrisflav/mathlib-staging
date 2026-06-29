@@ -15,8 +15,8 @@ public import Mathlib.CategoryTheory.Sites.Subsheaf
 /-!
 # Submodules of sheaves of modules
 
-Given a sheaf of modules `P`, a `SheafOfModules.Submodule P` is a submodule `N` of its underlying
-presheaf of modules whose membership is *local*.
+Given a sheaf of modules `M`, a `SheafOfModules.Submodule M` is a submodule `N` of its underlying
+presheaf of modules whose membership condition is local.
 `N.toPresheafOfModules` is then again a sheaf, giving `N.toSheafOfModules`.
 
 ## Main definitions
@@ -40,26 +40,26 @@ open PresheafOfModules
 variable {C : Type u₁} [Category.{v₁} C] {J : GrothendieckTopology C}
   {R : Sheaf J RingCat.{u}}
 
-/-- A submodule of a sheaf of modules `P`: a submodule `N` of the underlying presheaf of modules
-whose membership is *local*. Locality means that if a section `s` restricts into `N` along a
+/-- A submodule of a sheaf of modules `M`: a submodule `N` of the underlying presheaf of modules
+whose membership condition is local. Locality means that if a section `s` restricts into `N` along a
 covering sieve, then `s` already lies in `N`; this is exactly the condition making
 `N.toPresheafOfModules` a sheaf. -/
-structure Submodule (P : SheafOfModules.{v} R) extends P.val.Submodule where
+structure Submodule (M : SheafOfModules.{v} R) extends M.val.Submodule where
   /-- Membership in the submodule is local. -/
-  isSheaf ⦃X : Cᵒᵖ⦄ (s : P.val.obj X) :
+  isSheaf ⦃X : Cᵒᵖ⦄ (s : M.val.obj X) :
     toSubmodule.toSubfunctor.sieveOfSection s ∈ J X.unop → s ∈ toSubmodule.obj X
 
 namespace Submodule
 
-variable {P : SheafOfModules.{v} R} (N : P.Submodule)
+variable {M : SheafOfModules.{v} R} (N : M.Submodule)
 
 /-- The sheaf of modules associated to a submodule of a sheaf of modules. -/
 noncomputable def toSheafOfModules : SheafOfModules.{v} R where
   val := N.toPresheafOfModules
   isSheaf := by
-    have hF : Presieve.IsSheaf J (P.val.presheaf ⋙ CategoryTheory.forget AddCommGrpCat.{v}) :=
+    have hF : Presieve.IsSheaf J (M.val.presheaf ⋙ CategoryTheory.forget AddCommGrpCat.{v}) :=
       (isSheaf_iff_isSheaf_of_type J _).mp
-        (GrothendieckTopology.HasSheafCompose.isSheaf _ P.isSheaf)
+        (GrothendieckTopology.HasSheafCompose.isSheaf _ M.isSheaf)
     have hG : Presieve.IsSheaf J N.toSubfunctor.toFunctor := by
       rw [N.toSubfunctor.isSheaf_iff hF]
       exact N.isSheaf
@@ -67,8 +67,8 @@ noncomputable def toSheafOfModules : SheafOfModules.{v} R where
     rw [isSheaf_iff_isSheaf_of_type]
     exact Presieve.isSheaf_iso J (NatIso.ofComponents (fun _ ↦ Iso.refl _) (by cat_disch)) hG
 
-/-- The inclusion of the sheaf of modules associated to a submodule `N` into `P`. -/
-noncomputable def ι : N.toSheafOfModules ⟶ P :=
+/-- The inclusion of the sheaf of modules associated to a submodule `N` into `M`. -/
+noncomputable def ι : N.toSheafOfModules ⟶ M :=
   ⟨N.toSubmodule.ι⟩
 
 @[simp]
