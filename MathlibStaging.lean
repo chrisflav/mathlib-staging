@@ -3,6 +3,7 @@ import MathlibStaging.Algebra.Category.ModuleCat.Presheaf.Submodule
 import MathlibStaging.Algebra.Module.Submodule.Map
 import MathlibStaging.Init
 import MathlibStaging.Linter.Staging
+import MathlibStaging.Meta.GeneralizeHave
 import MathlibStaging.Meta.Overrides
 import MathlibStaging.Meta.Upstreamed
 import MathlibStaging.Meta.UpstreamedExt
