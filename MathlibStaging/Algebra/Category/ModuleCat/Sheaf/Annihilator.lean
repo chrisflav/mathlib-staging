@@ -62,8 +62,8 @@ noncomputable def annihilator : (unit R).Submodule where
   map {X Y} f := by
     intro r hr
     rw [Submodule.mem_comap, restrictₛₗ_apply]
-    refine (mem_annihilator_iInf _).mpr fun Z g m ↦ ?_
-    have h := (mem_annihilator_iInf _).mp hr (f ≫ g) m
+    refine (mem_annihilator_iInf M _).mpr fun Z g m ↦ ?_
+    have h := (mem_annihilator_iInf M _).mp hr (f ≫ g) m
     rwa [R.map_comp, RingCat.comp_apply] at h
 
 variable {M}
@@ -71,7 +71,7 @@ variable {M}
 lemma mem_annihilator {X : Cᵒᵖ} (r : (unit R).obj X) :
     r ∈ M.annihilator.obj X ↔
       ∀ ⦃Y : Cᵒᵖ⦄ (f : X ⟶ Y) (m : M.obj Y), R.map f r • m = 0 :=
-  mem_annihilator_iInf r
+  mem_annihilator_iInf M r
 
 /-- The annihilator is antitone with respect to morphisms that are surjective on sections:
 if `f : M ⟶ N` is componentwise surjective, then everything annihilating `M` annihilates `N`. -/
