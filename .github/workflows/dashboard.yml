@@ -8,7 +8,7 @@ on:
       - "MathlibStaging/**"
       - "Upstream.lean"
       - "dashboard/**"
-      - ".github/workflows/verso-blueprint.yml"
+      - ".github/workflows/dashboard.yml"
   workflow_dispatch:
 
 permissions:
