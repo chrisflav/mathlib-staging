@@ -1,14 +1,19 @@
 name: GitHub Pages (docs + dashboard)
 
-# Builds the API documentation and the Verso upstreaming dashboard and publishes
-# them together to GitHub Pages: the docs at `/docs` and the dashboard at
-# `/dashboard`. They share a single GitHub Pages deployment (only one is allowed
-# per repository), so this is the only workflow that deploys to Pages.
+# Publishes the API documentation and the Verso upstreaming dashboard together to
+# GitHub Pages: a landing page at `/`, the API docs at `/docs`, and the dashboard
+# at `/dashboard`.
+#
+# GitHub Pages allows only one deployment per repository, and docgen-action always
+# uploads (and, with `deploy` on, deploys) its output directory `docs/`. So rather
+# than deploy separately, we build the dashboard first and drop it into `docs/`,
+# and let docgen-action perform the single upload + deploy of everything.
 
 on:
   push:
-    # TEMPORARY: `fix-pages-deploy` is here so the combined site can be deployed
-    # and tested from this branch before merging. Remove it before merge.
+    # TEMPORARY: `fix-pages-deploy` lets the combined site be deployed and tested
+    # from this branch before merging. Remove it (and the matching `github-pages`
+    # environment branch policy) before merge.
     branches: [master, fix-pages-deploy]
   workflow_dispatch:
 
@@ -22,48 +27,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/configure-pages@v5
 
-      # elan provides the `lake` shim that docgen-action's build script invokes
-      # (and that the dashboard build below uses), so it must be installed first.
+      # elan provides the `lake` shim used both by the dashboard build below and
+      # by docgen-action's doc build, so install it first.
       - name: Install elan
         run: |
           curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
-      # --- API documentation (build only; deployment happens together below). ---
-      - name: Build API documentation
-        uses: leanprover-community/docgen-action@v1
-        with:
-          deploy: false
-
-      # --- Dashboard: generate the graph chapter (Lean v4.32.0-rc1), then build
-      #     the Verso site (Lean v4.31.0). elan selects the toolchain per directory. ---
       - name: Get mathlib build cache
         run: lake exe cache get || true
 
-      - name: Generate the graph chapter
+      # Build the dashboard (generate the chapter with Lean v4.32.0-rc1, build the
+      # Verso site with v4.31.0) and drop it into docgen's output dir so it ships
+      # alongside the API docs in the single deployment.
+      - name: Build dashboard into docs/dashboard
         run: |
           lake build MathlibStaging upstream
           lake exe upstream viz --decls --format verso \
             --out dashboard/UpstreamingBlueprint/Chapters/Graph.lean
-
-      - name: Build dashboard site
-        run: ./dashboard/scripts/ci-pages.sh
-
-      # --- Assemble the combined site: docs at /docs, dashboard at /dashboard. ---
-      - name: Assemble site
-        run: |
-          mkdir -p _site
-          # docgen-action leaves the built API docs under `docs/` (served at /docs).
-          if [ -d docs ]; then cp -r docs/. _site/; fi
-          mkdir -p _site/dashboard
-          cp -r dashboard/_out/site/html-multi/. _site/dashboard/
-          cat > _site/index.html <<'HTML'
+          ./dashboard/scripts/ci-pages.sh
+          mkdir -p docs/dashboard
+          cp -r dashboard/_out/site/html-multi/. docs/dashboard/
+          cat > docs/index.html <<'HTML'
           <!doctype html>
           <meta charset="utf-8">
           <title>mathlib-staging</title>
@@ -74,16 +64,9 @@ jobs:
           </ul>
           HTML
 
-      - uses: actions/upload-pages-artifact@v3
+      # docgen-action builds the API docs into `docs/docs`, then uploads and
+      # deploys the whole `docs/` directory (landing page + API docs + dashboard).
+      - name: Build docs and deploy to GitHub Pages
+        uses: leanprover-community/docgen-action@v1
         with:
-          path: _site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          build-page: false
