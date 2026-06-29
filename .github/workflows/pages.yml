@@ -7,10 +7,7 @@ name: GitHub Pages (docs + dashboard)
 
 on:
   push:
-    # TEMPORARY: `fix-pages-deploy` lets the combined site be deployed and tested
-    # from this branch before merging. Remove it (and the matching `github-pages`
-    # environment branch policy) before merge.
-    branches: [master, fix-pages-deploy]
+    branches: [master]
   workflow_dispatch:
 
 permissions:
