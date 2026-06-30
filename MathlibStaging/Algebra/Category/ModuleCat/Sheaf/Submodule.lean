@@ -100,14 +100,34 @@ instance : InfSet M.Submodule where
         have h := sInf_le (Set.mem_image_of_mem (·.toSubmodule) hN')
         exact PresheafOfModules.Submodule.le_iff.mp h (op V) hf }
 
+/-- The infimum of two submodules of a sheaf of modules: the underlying presheaf submodule is the
+infimum of the underlying presheaf submodules, which is again local. -/
+instance : Min M.Submodule where
+  min N₁ N₂ :=
+    { toSubmodule := N₁.toSubmodule ⊓ N₂.toSubmodule
+      isSheaf := fun X x hx ↦ by
+        show x ∈ N₁.toSubmodule.obj X ⊓ N₂.toSubmodule.obj X
+        refine Submodule.mem_inf.mpr ⟨?_, ?_⟩
+        · refine N₁.isSheaf x (J.superset_covering (fun V f hf ↦ ?_) hx)
+          exact PresheafOfModules.Submodule.le_iff.mp inf_le_left (op V) hf
+        · refine N₂.isSheaf x (J.superset_covering (fun V f hf ↦ ?_) hx)
+          exact PresheafOfModules.Submodule.le_iff.mp inf_le_right (op V) hf }
+
 /-- The submodules of a sheaf of modules form a complete lattice, induced from the complete lattice
-of submodules of the underlying presheaf of modules via the local infima. -/
+of submodules of the underlying presheaf of modules via the local infima.
+
+The binary infimum is given explicitly by the pointwise infimum (rather than the infimum coming from
+`completeLatticeOfInf`) so that `toSubmodule_inf` holds by `rfl`. -/
 noncomputable instance : CompleteLattice M.Submodule :=
-  completeLatticeOfInf M.Submodule fun s ↦
-    ⟨fun _ hN ↦ le_iff.mpr (sInf_le (Set.mem_image_of_mem _ hN)),
-      fun _ hb ↦ le_iff.mpr <| le_sInf <| by
-        rintro _ ⟨N', hN', rfl⟩
-        exact le_iff.mp (hb hN')⟩
+  { completeLatticeOfInf M.Submodule fun s ↦
+      ⟨fun _ hN ↦ le_iff.mpr (sInf_le (Set.mem_image_of_mem _ hN)),
+        fun _ hb ↦ le_iff.mpr <| le_sInf <| by
+          rintro _ ⟨N', hN', rfl⟩
+          exact le_iff.mp (hb hN')⟩ with
+    inf := (· ⊓ ·)
+    inf_le_left := fun _ _ ↦ le_iff.mpr inf_le_left
+    inf_le_right := fun _ _ ↦ le_iff.mpr inf_le_right
+    le_inf := fun _ _ _ h₁ h₂ ↦ le_iff.mpr (le_inf (le_iff.mp h₁) (le_iff.mp h₂)) }
 
 @[simp]
 lemma toSubmodule_sInf (s : Set M.Submodule) :
@@ -121,8 +141,8 @@ lemma toSubmodule_iInf {ι : Sort*} (N : ι → M.Submodule) :
 
 @[simp]
 lemma toSubmodule_inf (N₁ N₂ : M.Submodule) :
-    (N₁ ⊓ N₂).toSubmodule = N₁.toSubmodule ⊓ N₂.toSubmodule := by
-  rw [← sInf_pair, toSubmodule_sInf, Set.image_pair, sInf_pair]
+    (N₁ ⊓ N₂).toSubmodule = N₁.toSubmodule ⊓ N₂.toSubmodule :=
+  rfl
 
 end Submodule
 
