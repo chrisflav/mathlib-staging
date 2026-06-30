@@ -44,6 +44,7 @@ variable {C : Type u₁} [Category.{v₁} C] {J : GrothendieckTopology C}
 whose membership condition is local. Locality means that if a section `s` restricts into `N` along a
 covering sieve, then `s` already lies in `N`; this is exactly the condition making
 `N.toPresheafOfModules` a sheaf. -/
+@[ext]
 structure Submodule (M : SheafOfModules.{v} R) extends M.val.Submodule where
   /-- Membership in the submodule is local. -/
   isSheaf ⦃X : Cᵒᵖ⦄ (s : M.val.obj X) :
@@ -78,14 +79,12 @@ instance : Mono N.ι := by
   have : Mono ((forget R).map N.ι) := inferInstanceAs (Mono N.toSubmodule.ι)
   exact (forget R).mono_of_mono_map this
 
-@[ext]
-lemma ext {N₁ N₂ : M.Submodule} (h : N₁.toSubmodule = N₂.toSubmodule) : N₁ = N₂ := by
-  cases N₁
-  cases N₂
-  congr
-
 instance : PartialOrder M.Submodule :=
-  PartialOrder.lift _ fun _ _ ↦ ext
+  PartialOrder.lift toSubmodule fun N₁ N₂ h ↦ by
+    obtain ⟨_, _⟩ := N₁
+    obtain ⟨_, _⟩ := N₂
+    obtain rfl := h
+    rfl
 
 lemma le_iff {N₁ N₂ : M.Submodule} : N₁ ≤ N₂ ↔ N₁.toSubmodule ≤ N₂.toSubmodule := .rfl
 
@@ -109,6 +108,21 @@ noncomputable instance : CompleteLattice M.Submodule :=
       fun _ hb ↦ le_iff.mpr <| le_sInf <| by
         rintro _ ⟨N', hN', rfl⟩
         exact le_iff.mp (hb hN')⟩
+
+@[simp]
+lemma toSubmodule_sInf (s : Set M.Submodule) :
+    (sInf s).toSubmodule = sInf ((·.toSubmodule) '' s) :=
+  rfl
+
+@[simp]
+lemma toSubmodule_iInf {ι : Sort*} (N : ι → M.Submodule) :
+    (⨅ i, N i).toSubmodule = ⨅ i, (N i).toSubmodule := by
+  rw [iInf, toSubmodule_sInf, ← Set.range_comp, iInf, Function.comp_def]
+
+@[simp]
+lemma toSubmodule_inf (N₁ N₂ : M.Submodule) :
+    (N₁ ⊓ N₂).toSubmodule = N₁.toSubmodule ⊓ N₂.toSubmodule := by
+  rw [← sInf_pair, toSubmodule_sInf, Set.image_pair, sInf_pair]
 
 end Submodule
 
