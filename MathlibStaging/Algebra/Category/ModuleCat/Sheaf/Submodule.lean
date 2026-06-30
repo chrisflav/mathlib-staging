@@ -106,7 +106,6 @@ instance : Min M.Submodule where
   min N₁ N₂ :=
     { toSubmodule := N₁.toSubmodule ⊓ N₂.toSubmodule
       isSheaf := fun X x hx ↦ by
-        show x ∈ N₁.toSubmodule.obj X ⊓ N₂.toSubmodule.obj X
         refine Submodule.mem_inf.mpr ⟨?_, ?_⟩
         · refine N₁.isSheaf x (J.superset_covering (fun V f hf ↦ ?_) hx)
           exact PresheafOfModules.Submodule.le_iff.mp inf_le_left (op V) hf
