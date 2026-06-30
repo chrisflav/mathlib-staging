@@ -22,7 +22,7 @@ weak.linter.style.longFile = 1500
 name = "mathlib"
 scope = "leanprover-community"
 # Latest mathlib master commit (2026-06-28); the staging library tracks mathlib master.
-rev = "c8b35d4b1b468c70850db3b6e9fd0332fc9ed5e0"
+rev = "35ab429f5240fa22c680dfc666e76b7406114151"
 
 [[lean_lib]]
 name = "MathlibStaging"
@@ -33,3 +33,12 @@ name = "MathlibStaging"
 [[lean_exe]]
 name = "mirror_imports"
 root = "MirrorImports"
+
+# The upstreaming toolkit (see `Upstream.lean`): `lake exe upstream report`
+# ranks staging files/declarations by how ready they are to upstream to mathlib.
+# `supportInterpreter` is required because it loads the staging environment at
+# runtime via `withImportModules`.
+[[lean_exe]]
+name = "upstream"
+root = "Upstream"
+supportInterpreter = true

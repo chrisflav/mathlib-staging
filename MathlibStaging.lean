@@ -7,3 +7,5 @@ import MathlibStaging.CategoryTheory.Sites.Whiskering
 import MathlibStaging.Init
 import MathlibStaging.Linter.Staging
 import MathlibStaging.Meta.Overrides
+import MathlibStaging.Meta.Upstreamed
+import MathlibStaging.Meta.UpstreamedExt
