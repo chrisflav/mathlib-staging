@@ -6,6 +6,8 @@ import MathlibStaging.AlgebraicGeometry.Modules.Flat
 import MathlibStaging.Init
 import MathlibStaging.Linter.Staging
 import MathlibStaging.Meta.Overrides
+import MathlibStaging.Meta.Upstreamed
+import MathlibStaging.Meta.UpstreamedExt
 import MathlibStaging.RingTheory.Flat.Localization
 import MathlibStaging.RingTheory.Flat.Stability
 import MathlibStaging.RingTheory.RingHom.Flat
