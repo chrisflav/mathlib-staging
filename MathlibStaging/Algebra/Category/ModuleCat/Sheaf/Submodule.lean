@@ -89,8 +89,7 @@ instance : InfSet M.Submodule where
         simp only [PresheafOfModules.Submodule.sInf_obj, Submodule.mem_iInf]
         rintro _ ⟨N', hN', rfl⟩
         refine N'.isSheaf x (J.superset_covering (fun V f hf ↦ ?_) hx)
-        have h := sInf_le (Set.mem_image_of_mem (·.toSubmodule) hN')
-        exact PresheafOfModules.Submodule.le_iff.mp h (op V) hf }
+        exact (sInf_le (Set.mem_image_of_mem (·.toSubmodule) hN')) (op V) hf }
 
 instance : Min M.Submodule where
   min N₁ N₂ :=
