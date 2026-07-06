@@ -1,3 +1,4 @@
+import MathlibStaging.Algebra.Category.ModuleCat.Flat
 import MathlibStaging.Algebra.Category.ModuleCat.Presheaf
 import MathlibStaging.Algebra.Category.ModuleCat.Presheaf.Submodule
 import MathlibStaging.Algebra.Module.RingHom

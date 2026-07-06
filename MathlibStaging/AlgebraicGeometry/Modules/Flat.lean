@@ -7,9 +7,9 @@ module
 
 public import Mathlib.AlgebraicGeometry.Modules.Tilde
 public import Mathlib.AlgebraicGeometry.Morphisms.Flat
+public import MathlibStaging.Algebra.Category.ModuleCat.Flat
 public import MathlibStaging.Algebra.Module.RingHom
 public import MathlibStaging.RingTheory.Flat.Localization
-public import MathlibStaging.RingTheory.RingHom.Flat
 public import MathlibStaging.Init
 
 /-!
@@ -24,7 +24,10 @@ local ring `𝒪_{S, f(x)}`, where `𝒪_{S, f(x)}` acts on `F_x` through the lo
 
 * `AlgebraicGeometry.Scheme.Modules.stalkModule`: the canonical module structure of the local
   ring `𝒪_{X, x}` on the stalk `F_x` of an `𝒪_X`-module `F`.
-* `AlgebraicGeometry.Scheme.Modules.FlatAt`: the pointwise flatness condition at a point.
+* `AlgebraicGeometry.Scheme.Modules.stalk`: the stalk `F_x`, bundled as an object of the category
+  of modules over the local ring `𝒪_{X, x}`.
+* `AlgebraicGeometry.Scheme.Modules.FlatAt`: the pointwise flatness condition at a point,
+  phrased via `ModuleCat.flat` and restriction of scalars along the stalk map.
 * `AlgebraicGeometry.Scheme.Modules.Flat`: the class asserting flatness, defined as
   `∀ x, FlatAt f F x`.
 
@@ -65,14 +68,17 @@ abbrev stalkModule {X : Scheme.{u}} (F : X.Modules) (x : X) :
   PresheafOfModules.instModuleCarrierStalkCommRingCatCarrierAbPresheafOpensCarrier
     (R := X.presheaf) F.val x
 
+/-- The stalk `F_x` of an `𝒪_X`-module `F` at a point `x ∈ X`, bundled as an object of the
+category of modules over the local ring `𝒪_{X, x}`, with the module structure `stalkModule`. -/
+def stalk {X : Scheme.{u}} (F : X.Modules) (x : X) : ModuleCat (X.presheaf.stalk x) :=
+  @ModuleCat.of _ _ (F.presheaf.stalk x) _ (stalkModule F x)
+
 /-- The pointwise flatness condition at a single point `x ∈ X`: the stalk `F_x` is flat over the
 local ring `𝒪_{S, f(x)}`, where the latter acts by restriction of scalars along the stalk map
 `f.stalkMap x`. -/
 def FlatAt {X S : Scheme.{u}} (f : X ⟶ S) (F : X.Modules) (x : X) : Prop :=
-  letI := stalkModule F x
-  letI : Module (S.presheaf.stalk (f.base x)) (F.presheaf.stalk x) :=
-    Module.compHom (F.presheaf.stalk x) (f.stalkMap x).hom
-  Module.Flat (S.presheaf.stalk (f.base x)) (F.presheaf.stalk x)
+  ModuleCat.flat (S.presheaf.stalk (f.base x))
+    ((ModuleCat.restrictScalars (f.stalkMap x).hom).obj (F.stalk x))
 
 /-- A sheaf of modules `F` on a scheme `X` is *flat* over `S` via a morphism `f : X ⟶ S` if for
 every point `x ∈ X`, the stalk `F_x` is flat over the local ring `𝒪_{S, f(x)}` (acting by
@@ -139,12 +145,9 @@ theorem Flat.comp {X Y Z : Scheme.{u}} (f : X ⟶ Y) (g : Y ⟶ Z) (F : X.Module
     [hf : Flat f F] [AlgebraicGeometry.Flat g] : Flat (f ≫ g) F := by
   refine ⟨fun x ↦ ?_⟩
   simp only [FlatAt]
-  letI := stalkModule F x
-  letI : Module (Y.presheaf.stalk (f.base x)) (F.presheaf.stalk x) :=
-    Module.compHom (F.presheaf.stalk x) (f.stalkMap x).hom
-  rw [congrArg (Module.compHom (F.presheaf.stalk x)) (stalkMap_comp_hom f g x)]
-  exact Module.Flat.trans_compHom (g.stalkMap (f.base x)).hom
-    (AlgebraicGeometry.Flat.stalkMap g (f.base x)) (hf.flatAt x)
+  rw [stalkMap_comp_hom f g x]
+  exact (ModuleCat.flat_restrictScalars_comp_iff _ _ _).mpr
+    (ModuleCat.flat_restrictScalars (AlgebraicGeometry.Flat.stalkMap g (f.base x)) (hf.flatAt x))
 
 /-- **Flatness is local on the base.** If `j : V ⟶ S` is an open immersion and `g : X ⟶ V`, then
 `F` is flat over `S` via `g ≫ j` if and only if it is flat over `V` via `g`. In other words,
@@ -152,22 +155,13 @@ flatness over the base only depends on the base through an open neighbourhood of
 theorem flat_comp_isOpenImmersion_iff {X V S : Scheme.{u}} (g : X ⟶ V) (j : V ⟶ S)
     [IsOpenImmersion j] (F : X.Modules) :
     Flat (g ≫ j) F ↔ Flat g F := by
-  have hbij : ∀ x : X, Function.Bijective (j.stalkMap (g.base x)).hom := fun x ↦
-    (ConcreteCategory.isIso_iff_bijective (j.stalkMap (g.base x))).mp inferInstance
-  refine ⟨fun h ↦ ⟨fun x ↦ ?_⟩, fun h ↦ ⟨fun x ↦ ?_⟩⟩
-  all_goals
-    simp only [FlatAt]
-    letI := stalkModule F x
-    letI : Module (V.presheaf.stalk (g.base x)) (F.presheaf.stalk x) :=
-      Module.compHom (F.presheaf.stalk x) (g.stalkMap x).hom
-    have hcompHom := congrArg (Module.compHom (F.presheaf.stalk x)) (stalkMap_comp_hom g j x)
-  · have hx := h.flatAt x
-    simp only [FlatAt] at hx
-    rw [hcompHom] at hx
-    exact (Module.Flat.compHom_bijective_iff (j.stalkMap (g.base x)).hom (hbij x)).1 hx
-  · rw [hcompHom]
-    exact Module.Flat.trans_compHom (j.stalkMap (g.base x)).hom
-      (RingHom.Flat.of_bijective (hbij x)) (h.flatAt x)
+  simp only [flat_iff_forall_flatAt]
+  refine forall_congr' fun x ↦ ?_
+  simp only [FlatAt]
+  rw [stalkMap_comp_hom g j x]
+  exact (ModuleCat.flat_restrictScalars_comp_iff _ _ _).trans
+    (ModuleCat.flat_restrictScalars_iff_of_bijective
+      ((ConcreteCategory.isIso_iff_bijective (j.stalkMap (g.base x))).mp inferInstance) _)
 
 /-! ### The affine criterion for an `R`-algebra `S` and an `S`-module `M`
 
@@ -203,12 +197,12 @@ theorem flatAt_tilde_algebra_iff {R S : CommRingCat.{u}} (f : R ⟶ S) (M : Modu
       ((tilde M).presheaf.stalk x) := by
     refine IsScalarTower.of_algebraMap_smul fun r n ↦ ?_
     rw [Module.compHom_smul, hsquare r, Module.compHom_smul, algebraMap_smul]
-  simp only [FlatAt]
-  rw [Module.flat_iff_of_isLocalization ((Spec R).presheaf.stalk ((Spec.map f).base x))
-      ((Spec.map f).base x).asIdeal.primeCompl ((tilde M).presheaf.stalk x)]
-  exact Module.Flat.equiv_iff
-    ((IsLocalizedModule.linearEquiv x.asIdeal.primeCompl (tilde.toStalk M x).hom
-      (LocalizedModule.mkLinearMap x.asIdeal.primeCompl M)).restrictScalars R)
+  exact Iff.trans
+    (Module.flat_iff_of_isLocalization ((Spec R).presheaf.stalk ((Spec.map f).base x))
+      ((Spec.map f).base x).asIdeal.primeCompl ((tilde M).presheaf.stalk x))
+    (Module.Flat.equiv_iff
+      ((IsLocalizedModule.linearEquiv x.asIdeal.primeCompl (tilde.toStalk M x).hom
+        (LocalizedModule.mkLinearMap x.asIdeal.primeCompl M)).restrictScalars R))
 
 /-- **The affine case for an `R`-algebra `S`.** For a ring map `f : R ⟶ S` (an `R`-algebra `S`) and
 an `S`-module `M` (hence also an `R`-module, by restriction of scalars), the sheaf `M^~` on `Spec S`
@@ -317,6 +311,19 @@ theorem restrictStalkNatIso_hom_smul {U X : Scheme.{u}} (ι : U ⟶ X) [IsOpenIm
   exact congrArg
     (· • F.presheaf.map (ι.opensFunctor.map (homOfLE (inf_le_left : W ⊓ ι ⁻¹ᵁ V ≤ W))).op s) F2
 
+/-- For an open immersion `ι : U ⟶ X` and a point `u ∈ U`, the stalk of the restriction `F|_U`
+at `u`, with scalars restricted along the (iso) stalk map `ι.stalkMap u`, is isomorphic in
+`ModuleCat 𝒪_{X, ι u}` to the stalk of `F` at `ι u`. -/
+def restrictStalkModuleIso {U X : Scheme.{u}} (ι : U ⟶ X) [IsOpenImmersion ι]
+    (F : X.Modules) (u : U) :
+    (ModuleCat.restrictScalars (ι.stalkMap u).hom).obj ((F.restrict ι).stalk u) ≅
+      F.stalk (ι.base u) :=
+  (AddEquiv.toLinearEquiv
+    (M := (ModuleCat.restrictScalars (ι.stalkMap u).hom).obj ((F.restrict ι).stalk u))
+    (M₂ := F.stalk (ι.base u))
+    ((Scheme.Modules.restrictStalkNatIso ι u).app F).addCommGroupIsoToAddEquiv
+    (fun c m ↦ restrictStalkNatIso_hom_smul ι F u c m)).toModuleIso
+
 /-- **Pointwise comparison under restriction to an open subscheme.** For an open immersion
 `ι : U ⟶ X`, the flatness of the restricted module `F|_U` at `u` (over `S`, via `ι ≫ f`) is
 equivalent to the flatness of `F` at `ι(u)`. This holds because the stalk map of an open immersion
@@ -324,29 +331,12 @@ is an isomorphism, so restriction does not change the stalk data. -/
 theorem flatAt_restrict_iff {U X S : Scheme.{u}} (ι : U ⟶ X) [IsOpenImmersion ι]
     (f : X ⟶ S) (F : X.Modules) (u : U) :
     FlatAt (ι ≫ f) (F.restrict ι) u ↔ FlatAt f F (ι.base u) := by
-  letI := stalkModule (F.restrict ι) u
-  letI := stalkModule F (ι.base u)
-  let Φe : (F.restrict ι).presheaf.stalk u ≃+ F.presheaf.stalk (ι.base u) :=
-    ((Scheme.Modules.restrictStalkNatIso ι u).app F).addCommGroupIsoToAddEquiv
-  -- The two stalk-map base points `(ι ≫ f) u` and `f (ι u)` only agree up to
-  -- `Scheme.Hom.comp_base`; we phrase the module structures over the former (matching the
-  -- left-hand `FlatAt` syntactically), letting `f.stalkMap (ι.base u)` act through the latter.
-  letI : Module (S.presheaf.stalk ((ι ≫ f).base u)) ((F.restrict ι).presheaf.stalk u) :=
-    Module.compHom ((F.restrict ι).presheaf.stalk u) ((ι ≫ f).stalkMap u).hom
-  letI : Module (S.presheaf.stalk ((ι ≫ f).base u)) (F.presheaf.stalk (ι.base u)) :=
-    Module.compHom (F.presheaf.stalk (ι.base u)) (f.stalkMap (ι.base u)).hom
-  let e : (F.restrict ι).presheaf.stalk u ≃ₗ[S.presheaf.stalk ((ι ≫ f).base u)]
-      F.presheaf.stalk (ι.base u) :=
-    Φe.toLinearEquiv (by
-      intro b m
-      have hb : ((ι ≫ f).stalkMap u).hom b
-          = (ι.stalkMap u).hom ((f.stalkMap (ι.base u)).hom b) := by
-        rw [stalkMap_comp_hom ι f u]
-        rfl
-      have key := restrictStalkNatIso_hom_smul ι F u ((f.stalkMap (ι.base u)).hom b) m
-      rw [← hb] at key
-      exact key)
-  exact Module.Flat.equiv_iff e
+  simp only [FlatAt]
+  rw [stalkMap_comp_hom ι f u]
+  exact (ModuleCat.flat_restrictScalars_comp_iff _ _ _).trans
+    (ObjectProperty.prop_iff_of_iso _
+      ((ModuleCat.restrictScalars (f.stalkMap (ι.base u)).hom).mapIso
+        (restrictStalkModuleIso ι F u)))
 
 /-- Flatness of the restriction of `F` to an open subscheme `U` (via `ι ≫ f`) is equivalent to the
 pointwise flatness of `F` at every point of `U`. -/
