@@ -1,5 +1,7 @@
 import Lean.Util.Path
 import Lean.Elab.ParseImportsFast
+import Std.Data.HashMap
+import Std.Data.HashSet
 
 /-!
 # The `mirror_imports` linter
@@ -16,16 +18,24 @@ linters run on every staging file.
 
 **The import policy.** If a mirror file's upstream counterpart already exists in
 mathlib, then the mirror file must import that upstream counterpart
-(`Mathlib.A.B`), and may otherwise only import
-
-* other mirror files `MathlibStaging.X` whose upstream counterpart `Mathlib.X`
-  is a direct import of the upstream file `Mathlib.A.B`, and
-* `MathlibStaging.Init`.
+(`Mathlib.A.B`). Beyond that it may import anything it needs: the new
+declarations a mirror adds sometimes depend on lemmas from elsewhere in mathlib,
+so mirror files are allowed to pull in additional mathlib files (and additional
+mirror files) that their upstream counterpart does not.
 
 Importing the upstream counterpart is required because the mirror builds on it;
 everything else that the upstream file pulls in from outside mathlib (`Batteries`,
 `Lean`, `Init`, …) is already available through that counterpart, so mirror files
 never need to import it directly.
+
+Each extra import has a cost: it enlarges the set of mathlib files the mirror
+depends on transitively, which is exactly the set that upstreaming the mirror's
+new content would add to the corresponding mathlib file. The `report` subcommand
+(`lake exe mirror_imports report`) computes, for every mirror of an existing
+mathlib file, the mathlib modules it depends on transitively beyond its upstream
+counterpart, and prints them as a Markdown summary; CI posts this on every pull
+request. See the analogous transitive-import step in mathlib's `PR_summary`
+workflow.
 
 **The module-docstring policy.** If a mirror file's upstream counterpart already
 exists in mathlib, then the mirror file may not contain a non-empty module
@@ -47,8 +57,11 @@ these checks.
 is up to date, i.e. that `lake exe mk_all --lib MathlibStaging --check` would
 return `0`: the root must contain one `import` line per module.
 
-Run with `lake exe mirror_imports`. The staging and mathlib source directories
-may be overridden as the first two positional arguments (used by the tests).
+Run the checks with `lake exe mirror_imports` and the transitive-import report
+with `lake exe mirror_imports report`. In either mode the staging and mathlib
+source directories may be overridden as trailing positional arguments (used by
+the tests): `mirror_imports [stagingDir [mathlibDir]]` and
+`mirror_imports report [stagingDir [mathlibDir]]`.
 -/
 
 open Lean System
@@ -206,17 +219,6 @@ partial def collectModules (dir : FilePath) (prefixName : Name) :
       out := out.push (prefixName.str stem, entry.path)
   return out
 
-/-- The imports a mirror file of `upstream` is allowed to have: the upstream
-counterpart itself, the mirror of every mathlib-rooted direct import of the
-upstream file, and the staging prelude. -/
-def allowedImports (upstream : Name) (upstreamImports : Array Name) :
-    Array Name := Id.run do
-  let mut allowed := #[upstream, initModule]
-  for imp in upstreamImports do
-    if let some mirror := reroot mathlibRoot stagingRoot imp then
-      allowed := allowed.push mirror
-  return allowed
-
 /-- The content `lake exe mk_all` generates for the aggregator file: one sorted
 `import` line per module, in plain (non-`module`) style. This mirrors mathlib's
 `mk_all` for a downstream library. -/
@@ -271,19 +273,13 @@ def check (cfg : Config) : IO Bool := do
     let upstreamPath := modToFilePath cfg.mathlibDir upstream "lean"
     unless (← upstreamPath.pathExists) do continue
     -- (2a) The mirror must import its upstream counterpart, which it builds on.
+    -- Beyond that it may import anything it needs (the import policy no longer
+    -- restricts the remaining imports); the `report` subcommand accounts for the
+    -- transitive-import cost of the extra imports instead.
     unless imports.contains upstream do
       ok := false
       IO.eprintln s!"error: {path}: must import its upstream counterpart `{upstream}`.\n\
         A mirror of an existing mathlib file builds on that file, so it has to import it."
-    -- (2b) The mirror may import nothing beyond the allowed set.
-    let allowed := allowedImports upstream (← fileImports upstreamPath)
-    for imp in imports do
-      unless allowed.contains imp do
-        ok := false
-        IO.eprintln s!"error: {path}: disallowed import '{imp}'.\n\
-          The mirror of '{upstream}' may only import '{upstream}', `{initModule}`, and the \
-          mirror-hierarchy counterparts of its direct imports.\n\
-          Allowed imports: {allowed.qsort (·.toString < ·.toString) |>.toList}"
     -- (3) The module-docstring policy, when an upstream counterpart exists. The
     -- upstream file already carries the module's documentation, so its mirror
     -- must not repeat it in a non-empty module docstring of its own.
@@ -300,18 +296,138 @@ def check (cfg : Config) : IO Bool := do
   let mkAllOk ← checkMkAll cfg (importsOf.map fun (mod, _, _) => mod)
   return ok && mkAllOk
 
+/-! ## The transitive-import report
+
+A mirror file of an existing mathlib file may now import more than its upstream
+counterpart does. Each such extra import enlarges the set of mathlib files the
+mirror depends on transitively — the very set that upstreaming the mirror's new
+content would add to the corresponding mathlib file. The report below computes,
+for every mirror of an existing mathlib file, exactly those additional mathlib
+modules, and renders them as a Markdown summary for CI to post on pull requests.
+It mirrors the transitive-import step of mathlib's `PR_summary` workflow, but
+compares a mirror against its upstream counterpart rather than comparing a
+branch against `master`. -/
+
+/-- The direct imports of `mod`, memoised in `cache`. Staging modules are looked
+up in `stagingImports`; the imports of a mathlib module are read from its source
+file under `cfg.mathlibDir` (a module with no source file contributes none). -/
+def importsCached (cfg : Config) (stagingImports : Std.HashMap Name (Array Name))
+    (cache : IO.Ref (Std.HashMap Name (Array Name))) (mod : Name) :
+    IO (Array Name) := do
+  if let some v := stagingImports[mod]? then return v
+  if let some v := (← cache.get)[mod]? then return v
+  let path := modToFilePath cfg.mathlibDir mod "lean"
+  let v ← if (← path.pathExists) then fileImports path else pure #[]
+  cache.modify (·.insert mod v)
+  return v
+
+/-- The set of mathlib-rooted modules reachable from `roots` by following imports
+through both the staging and the mathlib import graphs. A root that is itself
+mathlib-rooted is included. Import graphs are acyclic, but a `visited` set guards
+against re-processing shared dependencies (and any accidental cycle). -/
+partial def mathlibClosure (cfg : Config) (stagingImports : Std.HashMap Name (Array Name))
+    (cache : IO.Ref (Std.HashMap Name (Array Name))) (roots : Array Name) :
+    IO (Std.HashSet Name) := do
+  let mut visited : Std.HashSet Name := {}
+  let mut result : Std.HashSet Name := {}
+  let mut stack := roots
+  while h : stack.size > 0 do
+    let mod := stack[stack.size - 1]
+    stack := stack.pop
+    if visited.contains mod then continue
+    visited := visited.insert mod
+    if mathlibRoot.isPrefixOf mod then
+      result := result.insert mod
+    for imp in (← importsCached cfg stagingImports cache mod) do
+      unless visited.contains imp do
+        stack := stack.push imp
+  return result
+
+/-- One row of the transitive-import report: a mirror file, its upstream
+counterpart, and the mathlib modules the mirror depends on transitively beyond
+that counterpart, sorted. -/
+structure ExtraImports where
+  /-- The mirror module. -/
+  mirror : Name
+  /-- Its upstream counterpart in mathlib. -/
+  upstream : Name
+  /-- The mathlib modules the mirror transitively imports but the upstream file
+  (together with `MathlibStaging.Init`) does not. -/
+  extra : Array Name
+
+/-- For every mirror of an existing mathlib file, the mathlib modules it depends
+on transitively beyond its upstream counterpart. The baseline subtracts both the
+upstream counterpart's closure and `MathlibStaging.Init`'s closure, so the common
+staging prelude never shows up as an extra import; what remains is exactly the
+content-driven mathlib dependencies the mirror adds. Rows with no extra imports
+are omitted. -/
+def extraImports (cfg : Config) : IO (Array ExtraImports) := do
+  let modules ← collectModules cfg.stagingDir stagingRoot
+  let mut stagingImports : Std.HashMap Name (Array Name) := {}
+  for (mod, path) in modules do
+    stagingImports := stagingImports.insert mod (← fileImports path)
+  let cache ← IO.mkRef ({} : Std.HashMap Name (Array Name))
+  -- `MathlibStaging.Init` is imported by every mirror, so its mathlib closure is
+  -- part of every baseline; compute it once.
+  let initClosure ← mathlibClosure cfg stagingImports cache #[initModule]
+  let mut rows := #[]
+  for (mod, _) in modules do
+    if isInfraModule mod then continue
+    let some upstream := reroot stagingRoot mathlibRoot mod | continue
+    unless (← (modToFilePath cfg.mathlibDir upstream "lean").pathExists) do continue
+    let baseline ← mathlibClosure cfg stagingImports cache #[upstream]
+    let mirrorClosure ← mathlibClosure cfg stagingImports cache #[mod]
+    let extra := mirrorClosure.toArray.filter fun m =>
+      !baseline.contains m && !initClosure.contains m
+    unless extra.isEmpty do
+      rows := rows.push
+        { mirror := mod, upstream, extra := extra.qsort (·.toString < ·.toString) }
+  return rows.qsort (·.mirror.toString < ·.mirror.toString)
+
+/-- A hidden marker identifying the report comment, so CI can find and update its
+own previous comment instead of posting a new one on every push. -/
+def reportMarker : String := "<!-- mirror-import-report -->"
+
+/-- Render the transitive-import report as Markdown, led by `reportMarker`. -/
+def formatReport (rows : Array ExtraImports) : String := Id.run do
+  let mut out := reportMarker ++ "\n### Transitive import report\n\n"
+  if rows.isEmpty then
+    return out ++ "Every mirror of an existing mathlib file stays within the transitive \
+      imports of its upstream counterpart: no mirror adds mathlib dependencies. 🎉\n"
+  out := out ++ "The mirror files below depend on more of mathlib than their upstream \
+    counterparts. Upstreaming their new content would add these transitive imports to the \
+    corresponding mathlib file:\n\n"
+  for row in rows do
+    let list := String.intercalate "\n"
+      (row.extra.map (fun n => s!"  - `{n}`")).toList
+    out := out ++ s!"<details><summary><code>{row.mirror}</code> (mirror of \
+      <code>{row.upstream}</code>): +{row.extra.size} transitive import(s)</summary>\n\n\
+      {list}\n\n</details>\n\n"
+  return out
+
 end MirrorImports
 
 open MirrorImports in
-/-- Entry point: `mirror_imports [stagingDir [mathlibDir]]`. -/
+/-- Entry point.
+
+* `mirror_imports [stagingDir [mathlibDir]]` runs the import-policy and
+  module-docstring checks (see the module docstring), returning `1` on violations.
+* `mirror_imports report [stagingDir [mathlibDir]]` prints the Markdown
+  transitive-import report to stdout and always returns `0`. -/
 def main (args : List String) : IO UInt32 := do
-  let cfg : Config := match args with
+  let dirsCfg : List String → Config
     | [] => {}
     | [s] => { stagingDir := s }
     | s :: m :: _ => { stagingDir := s, mathlibDir := m }
-  if (← check cfg) then
-    IO.println "mirror_imports: all mirror files satisfy the import policy"
+  match args with
+  | "report" :: rest =>
+    IO.println (formatReport (← extraImports (dirsCfg rest)))
     return 0
-  else
-    IO.eprintln "mirror_imports: import policy violations found"
-    return 1
+  | _ =>
+    let cfg := dirsCfg args
+    if (← check cfg) then
+      IO.println "mirror_imports: all mirror files satisfy the import policy"
+      return 0
+    else
+      IO.eprintln "mirror_imports: import policy violations found"
+      return 1
