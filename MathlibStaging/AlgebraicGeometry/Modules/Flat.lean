@@ -15,10 +15,16 @@ public import MathlibStaging.Init
 /-!
 # Flat sheaves of modules
 
-Given a morphism of schemes `f : X ⟶ S` and an `𝒪_X`-module `F`, we say that `F` is
-*flat* over `S` (via `f`) if for every point `x ∈ X`, the stalk `F_x` is a flat module over the
-local ring `𝒪_{S, f(x)}`, where `𝒪_{S, f(x)}` acts on `F_x` through the local ring homomorphism
-`f.stalkMap x : 𝒪_{S, f(x)} ⟶ 𝒪_{X, x}` induced by `f`.
+We say that an `𝒪_X`-module `F` is *flat* if for every point `x ∈ X`, the stalk `F_x` is a flat
+module over the local ring `𝒪_{X, x}`. This is the *absolute* notion, over the structure sheaf of
+`X` itself.
+
+More generally, given a morphism of schemes `f : X ⟶ S`, we say that `F` is *flat over `S`* (via
+`f`) if for every point `x ∈ X`, the stalk `F_x` is a flat module over the local ring `𝒪_{S, f(x)}`,
+where `𝒪_{S, f(x)}` acts on `F_x` through the local ring homomorphism
+`f.stalkMap x : 𝒪_{S, f(x)} ⟶ 𝒪_{X, x}` induced by `f`. Conceptually this is the absolute flatness
+of the restriction of scalars of `F` to the inverse-image structure sheaf `f⁻¹𝒪_S`; the absolute
+notion is the special case `f = 𝟙 X` (`flatOver_id_iff`).
 
 ## Main definitions
 
@@ -26,23 +32,29 @@ local ring `𝒪_{S, f(x)}`, where `𝒪_{S, f(x)}` acts on `F_x` through the lo
   ring `𝒪_{X, x}` on the stalk `F_x` of an `𝒪_X`-module `F`.
 * `AlgebraicGeometry.Scheme.Modules.stalk`: the stalk `F_x`, bundled as an object of the category
   of modules over the local ring `𝒪_{X, x}`.
-* `AlgebraicGeometry.Scheme.Modules.FlatAt`: the pointwise flatness condition at a point,
-  phrased via `ModuleCat.flat` and restriction of scalars along the stalk map.
-* `AlgebraicGeometry.Scheme.Modules.Flat`: the class asserting flatness, defined as
-  `∀ x, FlatAt f F x`.
+* `AlgebraicGeometry.Scheme.Modules.FlatAt`: the pointwise (absolute) flatness condition at a point,
+  `F_x` is flat over `𝒪_{X, x}`.
+* `AlgebraicGeometry.Scheme.Modules.Flat`: the class asserting (absolute) flatness, defined as
+  `∀ x, FlatAt F x`.
+* `AlgebraicGeometry.Scheme.Modules.FlatAtOver`/`FlatOver`: the relative pointwise condition and
+  class, flatness of `F` over a base `S` via `f : X ⟶ S`, phrased via `ModuleCat.flat` and
+  restriction of scalars along the stalk map.
 
 ## Main results
 
-* `AlgebraicGeometry.Scheme.Modules.flat_tilde_iff`: for a commutative ring `R` and an `R`-module
-  `M`, the sheaf `M^~` on `Spec R` is flat over `Spec R` (via the identity morphism) if and only if
-  `M` is a flat `R`-module.
-* `AlgebraicGeometry.Scheme.Modules.flat_tilde_iff_of_algebra`: the same criterion for a ring map
-  `f : R ⟶ S` and an `S`-module `M`: the sheaf `M^~` on `Spec S` is flat over `Spec R`
+* `AlgebraicGeometry.Scheme.Modules.flatOver_id_iff`: `F` is flat over the base via the identity
+  morphism `𝟙 X` iff it is (absolutely) flat.
+* `AlgebraicGeometry.Scheme.Modules.flatOver_tilde_iff`: for a commutative ring `R` and an
+  `R`-module `M`, the sheaf `M^~` on `Spec R` is flat over `Spec R` (via the identity morphism) if
+  and only if `M` is a flat `R`-module.
+* `AlgebraicGeometry.Scheme.Modules.flatOver_tilde_iff_of_algebra`: the same criterion for a ring
+  map `f : R ⟶ S` and an `S`-module `M`: the sheaf `M^~` on `Spec S` is flat over `Spec R`
   (via `Spec.map f`) if and only if `M` is flat as an `R`-module.
-* `AlgebraicGeometry.Scheme.Modules.Flat.comp`: flatness is preserved under composition with a
+* `AlgebraicGeometry.Scheme.Modules.FlatOver.comp`: flatness is preserved under composition with a
   flat morphism of the base.
-* `AlgebraicGeometry.Scheme.Modules.flat_comp_isOpenImmersion_iff`: flatness is local on the base.
-* `AlgebraicGeometry.Scheme.Modules.flat_iff_forall_openCover`: flatness is local on the source.
+* `AlgebraicGeometry.Scheme.Modules.flatOver_comp_isOpenImmersion_iff`: flatness is local on the
+  base.
+* `AlgebraicGeometry.Scheme.Modules.flatOver_iff_forall_openCover`: flatness is local on the source.
 -/
 
 @[expose] public noncomputable section
@@ -74,23 +86,64 @@ def stalk {X : Scheme.{u}} (F : X.Modules) (x : X) : ModuleCat (X.presheaf.stalk
   @ModuleCat.of _ _ (F.presheaf.stalk x) _ (stalkModule F x)
 
 /-- The pointwise flatness condition at a single point `x ∈ X`: the stalk `F_x` is flat over the
-local ring `𝒪_{S, f(x)}`, where the latter acts by restriction of scalars along the stalk map
-`f.stalkMap x`. -/
-def FlatAt {X S : Scheme.{u}} (f : X ⟶ S) (F : X.Modules) (x : X) : Prop :=
+local ring `𝒪_{X, x}`. -/
+def FlatAt {X : Scheme.{u}} (F : X.Modules) (x : X) : Prop :=
+  ModuleCat.flat (X.presheaf.stalk x) (F.stalk x)
+
+/-- A sheaf of modules `F` on a scheme `X` is *flat* if for every point `x ∈ X`, the stalk `F_x`
+is flat over the local ring `𝒪_{X, x}`, i.e. if `FlatAt F x` holds at every point. -/
+class Flat {X : Scheme.{u}} (F : X.Modules) : Prop where
+  flatAt : ∀ x : X, FlatAt F x
+
+/-- `Flat F` holds iff the pointwise condition `FlatAt F x` holds for all `x`. -/
+theorem flat_iff_forall_flatAt {X : Scheme.{u}} (F : X.Modules) :
+    Flat F ↔ ∀ x : X, FlatAt F x :=
+  ⟨fun h ↦ h.flatAt, fun h ↦ ⟨h⟩⟩
+
+/-! ### Relative flatness over a base
+
+`Flat` above is *absolute*: it is flatness of `F` over its own structure sheaf `𝒪_X`. To talk about
+flatness of `F` over a base `S` via a morphism `f : X ⟶ S`, we restrict scalars of each stalk `F_x`
+along the stalk map `f.stalkMap x : 𝒪_{S, f(x)} ⟶ 𝒪_{X, x}`.
+
+Conceptually this is the absolute flatness (`Flat`) of the restriction of scalars of `F` to the
+inverse-image structure sheaf `f⁻¹𝒪_S` (whose stalk at `x` is `𝒪_{S, f(x)}`). We phrase it
+stalk-wise directly, as Mathlib does not yet provide the inverse-image sheaf of rings and its stalk
+identification. -/
+
+/-- The pointwise flatness condition of `F` over a base `S` (via `f : X ⟶ S`) at a single point
+`x ∈ X`: the stalk `F_x` is flat over the local ring `𝒪_{S, f(x)}`, where the latter acts by
+restriction of scalars along the stalk map `f.stalkMap x`. -/
+def FlatAtOver {X S : Scheme.{u}} (f : X ⟶ S) (F : X.Modules) (x : X) : Prop :=
   ModuleCat.flat (S.presheaf.stalk (f.base x))
     ((ModuleCat.restrictScalars (f.stalkMap x).hom).obj (F.stalk x))
 
-/-- A sheaf of modules `F` on a scheme `X` is *flat* over `S` via a morphism `f : X ⟶ S` if for
+/-- A sheaf of modules `F` on a scheme `X` is *flat over `S`* via a morphism `f : X ⟶ S` if for
 every point `x ∈ X`, the stalk `F_x` is flat over the local ring `𝒪_{S, f(x)}` (acting by
-restriction of scalars along the stalk map `f.stalkMap x`), i.e. if `FlatAt f F x` holds at every
-point. -/
-class Flat {X S : Scheme.{u}} (f : X ⟶ S) (F : X.Modules) : Prop where
-  flatAt : ∀ x : X, FlatAt f F x
+restriction of scalars along the stalk map `f.stalkMap x`), i.e. if `FlatAtOver f F x` holds at
+every point. -/
+class FlatOver {X S : Scheme.{u}} (f : X ⟶ S) (F : X.Modules) : Prop where
+  flatAt : ∀ x : X, FlatAtOver f F x
 
-/-- `Flat f F` holds iff the pointwise condition `FlatAt f F x` holds for all `x`. -/
-theorem flat_iff_forall_flatAt {X S : Scheme.{u}} (f : X ⟶ S) (F : X.Modules) :
-    Flat f F ↔ ∀ x : X, FlatAt f F x :=
+/-- `FlatOver f F` holds iff the pointwise condition `FlatAtOver f F x` holds for all `x`. -/
+theorem flatOver_iff_forall_flatAtOver {X S : Scheme.{u}} (f : X ⟶ S) (F : X.Modules) :
+    FlatOver f F ↔ ∀ x : X, FlatAtOver f F x :=
   ⟨fun h ↦ h.flatAt, fun h ↦ ⟨h⟩⟩
+
+/-- Flatness of `F` over its own structure sheaf, `Flat F`, is the special case of relative
+flatness `FlatOver f F` for the identity morphism `f = 𝟙 X`. Under the identity stalk map the
+restriction of scalars is the identity, so the two pointwise conditions agree. -/
+theorem flatAtOver_id {X : Scheme.{u}} (F : X.Modules) (x : X) :
+    FlatAtOver (𝟙 X) F x ↔ FlatAt F x := by
+  have hf : ((𝟙 X : X ⟶ X).stalkMap x).hom = RingHom.id (X.presheaf.stalk x) := by
+    rw [Scheme.Hom.stalkMap_id]; exact CommRingCat.hom_id
+  exact ObjectProperty.prop_iff_of_iso _ (ModuleCat.restrictScalarsId'App _ hf (F.stalk x))
+
+/-- `F` is flat over the base via the identity morphism `𝟙 X` iff it is (absolutely) flat. -/
+theorem flatOver_id_iff {X : Scheme.{u}} (F : X.Modules) :
+    FlatOver (𝟙 X) F ↔ Flat F := by
+  rw [flatOver_iff_forall_flatAtOver, flat_iff_forall_flatAt]
+  exact forall_congr' fun x ↦ flatAtOver_id F x
 
 end Scheme.Modules
 
@@ -141,10 +194,10 @@ lemma stalkMap_comp_hom {X Y Z : Scheme.{u}} (f : X ⟶ Y) (g : Y ⟶ Z) (x : X)
 /-- **Transitivity along a flat base.** If a sheaf of modules `F` on `X` is flat over `Y` via
 `f : X ⟶ Y`, and `g : Y ⟶ Z` is a flat morphism of schemes, then `F` is flat over `Z` via the
 composite `f ≫ g`. -/
-theorem Flat.comp {X Y Z : Scheme.{u}} (f : X ⟶ Y) (g : Y ⟶ Z) (F : X.Modules)
-    [hf : Flat f F] [AlgebraicGeometry.Flat g] : Flat (f ≫ g) F := by
+theorem FlatOver.comp {X Y Z : Scheme.{u}} (f : X ⟶ Y) (g : Y ⟶ Z) (F : X.Modules)
+    [hf : FlatOver f F] [AlgebraicGeometry.Flat g] : FlatOver (f ≫ g) F := by
   refine ⟨fun x ↦ ?_⟩
-  simp only [FlatAt]
+  simp only [FlatAtOver]
   rw [stalkMap_comp_hom f g x]
   exact (ModuleCat.flat_restrictScalars_comp_iff _ _ _).mpr
     (ModuleCat.flat_restrictScalars (AlgebraicGeometry.Flat.stalkMap g (f.base x)) (hf.flatAt x))
@@ -152,12 +205,12 @@ theorem Flat.comp {X Y Z : Scheme.{u}} (f : X ⟶ Y) (g : Y ⟶ Z) (F : X.Module
 /-- **Flatness is local on the base.** If `j : V ⟶ S` is an open immersion and `g : X ⟶ V`, then
 `F` is flat over `S` via `g ≫ j` if and only if it is flat over `V` via `g`. In other words,
 flatness over the base only depends on the base through an open neighbourhood of the image. -/
-theorem flat_comp_isOpenImmersion_iff {X V S : Scheme.{u}} (g : X ⟶ V) (j : V ⟶ S)
+theorem flatOver_comp_isOpenImmersion_iff {X V S : Scheme.{u}} (g : X ⟶ V) (j : V ⟶ S)
     [IsOpenImmersion j] (F : X.Modules) :
-    Flat (g ≫ j) F ↔ Flat g F := by
-  simp only [flat_iff_forall_flatAt]
+    FlatOver (g ≫ j) F ↔ FlatOver g F := by
+  simp only [flatOver_iff_forall_flatAtOver]
   refine forall_congr' fun x ↦ ?_
-  simp only [FlatAt]
+  simp only [FlatAtOver]
   rw [stalkMap_comp_hom g j x]
   exact (ModuleCat.flat_restrictScalars_comp_iff _ _ _).trans
     (ModuleCat.flat_restrictScalars_iff_of_bijective
@@ -173,12 +226,12 @@ an `R`-module. -/
 /-- The pointwise flatness condition for `M^~` (with `M` an `S`-module, for a ring map `f : R ⟶ S`)
 over `Spec R` at a prime `x` of `S` is equivalent to the localization `M_x` being flat over `R`
 (with `R` acting on `M` by restriction of scalars along `f`). -/
-theorem flatAt_tilde_algebra_iff {R S : CommRingCat.{u}} (f : R ⟶ S) (M : ModuleCat.{u} S)
+theorem flatAtOver_tilde_algebra_iff {R S : CommRingCat.{u}} (f : R ⟶ S) (M : ModuleCat.{u} S)
     (x : PrimeSpectrum S) :
     letI := f.hom.toAlgebra
     letI : Module R M := Module.compHom M f.hom
     letI : IsScalarTower R S M := IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
-    FlatAt (Spec.map f) (tilde M) x ↔
+    FlatAtOver (Spec.map f) (tilde M) x ↔
       Module.Flat R (LocalizedModule x.asIdeal.primeCompl M) := by
   letI := f.hom.toAlgebra
   letI : Module R M := Module.compHom M f.hom
@@ -207,28 +260,28 @@ theorem flatAt_tilde_algebra_iff {R S : CommRingCat.{u}} (f : R ⟶ S) (M : Modu
 /-- **The affine case for an `R`-algebra `S`.** For a ring map `f : R ⟶ S` (an `R`-algebra `S`) and
 an `S`-module `M` (hence also an `R`-module, by restriction of scalars), the sheaf `M^~` on `Spec S`
 is flat over `Spec R` (via `Spec.map f`) if and only if `M` is a flat `R`-module. -/
-theorem flat_tilde_iff_of_algebra {R S : CommRingCat.{u}} (f : R ⟶ S) (M : ModuleCat.{u} S) :
+theorem flatOver_tilde_iff_of_algebra {R S : CommRingCat.{u}} (f : R ⟶ S) (M : ModuleCat.{u} S) :
     letI := f.hom.toAlgebra
     letI : Module R M := Module.compHom M f.hom
-    Flat (Spec.map f) (tilde M) ↔ Module.Flat R M := by
+    FlatOver (Spec.map f) (tilde M) ↔ Module.Flat R M := by
   letI := f.hom.toAlgebra
   letI : Module R M := Module.compHom M f.hom
   have : IsScalarTower R S M := IsScalarTower.of_algebraMap_smul fun _ _ ↦ rfl
-  rw [flat_iff_forall_flatAt]
+  rw [flatOver_iff_forall_flatAtOver]
   refine ⟨fun h ↦ (Module.flat_iff_forall_localizedModule_maximal_of_algebra (R := R) (S := S)
-      (M := M)).mpr fun q _ ↦ (flatAt_tilde_algebra_iff f M ⟨q, inferInstance⟩).mp
+      (M := M)).mpr fun q _ ↦ (flatAtOver_tilde_algebra_iff f M ⟨q, inferInstance⟩).mp
         (h ⟨q, inferInstance⟩),
-    fun hM x ↦ (flatAt_tilde_algebra_iff f M x).mpr
+    fun hM x ↦ (flatAtOver_tilde_algebra_iff f M x).mpr
       (Module.Flat.localizedModule_base M x.asIdeal.primeCompl)⟩
 
 /-- **The affine case.** For a commutative ring `R` and an `R`-module `M`, the quasi-coherent
 sheaf `M^~` on `Spec R` is flat over `Spec R` (via the identity morphism) if and only if `M` is a
-flat `R`-module. This is the special case of `flat_tilde_iff_of_algebra` for the identity ring
+flat `R`-module. This is the special case of `flatOver_tilde_iff_of_algebra` for the identity ring
 map `𝟙 R`. -/
-theorem flat_tilde_iff {R : CommRingCat.{u}} (M : ModuleCat.{u} R) :
-    Flat (𝟙 (Spec R)) (tilde M) ↔ Module.Flat R M := by
+theorem flatOver_tilde_iff {R : CommRingCat.{u}} (M : ModuleCat.{u} R) :
+    FlatOver (𝟙 (Spec R)) (tilde M) ↔ Module.Flat R M := by
   rw [← Spec.map_id R]
-  exact flat_tilde_iff_of_algebra (𝟙 R) M
+  exact flatOver_tilde_iff_of_algebra (𝟙 R) M
 
 /-! ### Flatness is local on the source (open covers)
 
@@ -328,10 +381,10 @@ def restrictStalkModuleIso {U X : Scheme.{u}} (ι : U ⟶ X) [IsOpenImmersion ι
 `ι : U ⟶ X`, the flatness of the restricted module `F|_U` at `u` (over `S`, via `ι ≫ f`) is
 equivalent to the flatness of `F` at `ι(u)`. This holds because the stalk map of an open immersion
 is an isomorphism, so restriction does not change the stalk data. -/
-theorem flatAt_restrict_iff {U X S : Scheme.{u}} (ι : U ⟶ X) [IsOpenImmersion ι]
+theorem flatAtOver_restrict_iff {U X S : Scheme.{u}} (ι : U ⟶ X) [IsOpenImmersion ι]
     (f : X ⟶ S) (F : X.Modules) (u : U) :
-    FlatAt (ι ≫ f) (F.restrict ι) u ↔ FlatAt f F (ι.base u) := by
-  simp only [FlatAt]
+    FlatAtOver (ι ≫ f) (F.restrict ι) u ↔ FlatAtOver f F (ι.base u) := by
+  simp only [FlatAtOver]
   rw [stalkMap_comp_hom ι f u]
   exact (ModuleCat.flat_restrictScalars_comp_iff _ _ _).trans
     (ObjectProperty.prop_iff_of_iso _
@@ -340,19 +393,19 @@ theorem flatAt_restrict_iff {U X S : Scheme.{u}} (ι : U ⟶ X) [IsOpenImmersion
 
 /-- Flatness of the restriction of `F` to an open subscheme `U` (via `ι ≫ f`) is equivalent to the
 pointwise flatness of `F` at every point of `U`. -/
-theorem flat_restrict_iff {U X S : Scheme.{u}} (ι : U ⟶ X) [IsOpenImmersion ι]
+theorem flatOver_restrict_iff {U X S : Scheme.{u}} (ι : U ⟶ X) [IsOpenImmersion ι]
     (f : X ⟶ S) (F : X.Modules) :
-    Flat (ι ≫ f) (F.restrict ι) ↔ ∀ u : U, FlatAt f F (ι.base u) := by
-  rw [flat_iff_forall_flatAt]
-  exact forall_congr' fun u ↦ flatAt_restrict_iff ι f F u
+    FlatOver (ι ≫ f) (F.restrict ι) ↔ ∀ u : U, FlatAtOver f F (ι.base u) := by
+  rw [flatOver_iff_forall_flatAtOver]
+  exact forall_congr' fun u ↦ flatAtOver_restrict_iff ι f F u
 
 /-- **Flatness is local on the source.** For an open cover `𝒰` of `X`, the module `F` is flat over
 `S` (via `f`) if and only if for every member `Uᵢ` of the cover, the restriction `F|_{Uᵢ}` is flat
 over `S` (via `𝒰.f i ≫ f`). -/
-theorem flat_iff_forall_openCover {X S : Scheme.{u}} (f : X ⟶ S) (F : X.Modules)
+theorem flatOver_iff_forall_openCover {X S : Scheme.{u}} (f : X ⟶ S) (F : X.Modules)
     (𝒰 : X.OpenCover) :
-    Flat f F ↔ ∀ i, Flat (𝒰.f i ≫ f) (F.restrict (𝒰.f i)) := by
-  simp_rw [flat_restrict_iff, flat_iff_forall_flatAt]
+    FlatOver f F ↔ ∀ i, FlatOver (𝒰.f i ≫ f) (F.restrict (𝒰.f i)) := by
+  simp_rw [flatOver_restrict_iff, flatOver_iff_forall_flatAtOver]
   refine ⟨fun h i u ↦ h _, fun h x ↦ ?_⟩
   obtain ⟨u, hu⟩ := 𝒰.covers x
   rw [← hu]
