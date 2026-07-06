@@ -9,6 +9,7 @@ public import MathlibStaging.Init
 public import MathlibStaging.Algebra.Category.ModuleCat.Presheaf
 public import MathlibStaging.Algebra.Module.Submodule.Map
 public import Mathlib.Algebra.Category.ModuleCat.Presheaf.EpiMono
+public import Mathlib.CategoryTheory.Subfunctor.Basic
 
 /-!
 # Submodules of presheaves of modules
@@ -24,6 +25,8 @@ we construct the corresponding subobject of `M` in the category
   under restriction.
 - `PresheafOfModules.Submodule.toPresheafOfModules`: the associated
   presheaf of modules.
+- `PresheafOfModules.Submodule.toSubfunctor`: the associated subfunctor of the
+  underlying type-valued presheaf.
 
 The families of submodules of `M` form a `CompleteLattice`, with all the lattice
 operations computed pointwise.
@@ -75,6 +78,15 @@ noncomputable def toPresheafOfModules : PresheafOfModules.{v} R where
 lemma toPresheafOfModules_map_apply {X Y : Cᵒᵖ} (f : X ⟶ Y) (m : N.obj X) :
     dsimp% ((N.toPresheafOfModules).map f m).val = M.map f m.val := by
   rfl
+
+/-- The subfunctor of the underlying type-valued presheaf of `M` induced by a submodule `N`. -/
+def toSubfunctor : Subfunctor (M.presheaf ⋙ CategoryTheory.forget AddCommGrpCat.{v}) where
+  obj X := {r : M.obj X | r ∈ N.obj X}
+  map := fun {_ _} f _ hr ↦ N.map_mem f hr
+
+@[simp]
+lemma mem_toSubfunctor_obj {X : Cᵒᵖ} (r : M.obj X) :
+    r ∈ N.toSubfunctor.obj X ↔ r ∈ N.obj X := Iff.rfl
 
 /-- The inclusion of the subobject cut out by `N` into `M`. -/
 @[simps!]
