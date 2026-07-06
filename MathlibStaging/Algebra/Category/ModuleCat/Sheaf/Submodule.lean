@@ -6,7 +6,7 @@ Authors: Christian Merten
 module
 
 public import MathlibStaging.Init
-public import MathlibStaging.Algebra.Category.ModuleCat.Presheaf.Submodule
+public import MathlibStaging.Algebra.Category.ModuleCat.Presheaf.Subfunctor
 public import MathlibStaging.CategoryTheory.Sites.Whiskering
 public import Mathlib.Algebra.Category.Grp.ForgetCorepresentable
 public import Mathlib.Algebra.Category.ModuleCat.Sheaf

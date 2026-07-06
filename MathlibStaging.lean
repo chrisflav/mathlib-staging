@@ -1,8 +1,6 @@
-import MathlibStaging.Algebra.Category.ModuleCat.Presheaf
-import MathlibStaging.Algebra.Category.ModuleCat.Presheaf.Submodule
+import MathlibStaging.Algebra.Category.ModuleCat.Presheaf.Subfunctor
 import MathlibStaging.Algebra.Category.ModuleCat.Sheaf.Annihilator
 import MathlibStaging.Algebra.Category.ModuleCat.Sheaf.Submodule
-import MathlibStaging.Algebra.Module.Submodule.Map
 import MathlibStaging.CategoryTheory.Sites.Whiskering
 import MathlibStaging.Init
 import MathlibStaging.Linter.Staging
