@@ -6,7 +6,7 @@ Authors: Christian Merten
 module
 
 public import MathlibStaging.Init
-public import MathlibStaging.Algebra.Category.ModuleCat.Presheaf.Submodule
+public import Mathlib.Algebra.Category.ModuleCat.Presheaf.Submodule
 public import MathlibStaging.Algebra.Category.ModuleCat.Sheaf.Submodule
 public import Mathlib.Algebra.Category.ModuleCat.Sheaf
 public import Mathlib.RingTheory.Ideal.Maps
