@@ -1,0 +1,65 @@
+name: Transitive import report
+
+# On every pull request, report how much of mathlib each mirror file imports
+# transitively beyond its upstream counterpart, and post (or update) that report
+# as a comment. This is the staging analogue of the transitive-import step in
+# mathlib's `PR_summary` workflow: the weakened `mirror_imports` linter lets a
+# mirror import more than its upstream file, and this report keeps the resulting
+# transitive-import cost visible on the PR.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write  # post / update the report comment
+
+# One report per PR; a newer push supersedes an in-flight run.
+concurrency:
+  group: import-report-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    # Comment posting needs a writable token, which pull_request grants only for
+    # same-repository branches; skip on forks rather than fail on a read-only token.
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@v5
+
+      # elan provides the `lake` shim; installing it is enough, since building the
+      # report executable only needs Lean core plus the mathlib *sources* (fetched
+      # by lake as a dependency), not a full mathlib build.
+      - name: Install elan
+        run: |
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
+
+      - name: Build the report executable
+        run: lake build mirror_imports
+
+      - name: Compute the transitive-import report
+        run: lake exe mirror_imports report | tee import_report.md
+
+      - name: Post or update the report comment
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          marker='<!-- mirror-import-report -->'
+          # Find our own previous comment, if any, by its hidden marker.
+          existing="$(gh api --paginate "repos/${REPO}/issues/${PR}/comments" \
+            --jq "[.[] | select(.body | contains(\"${marker}\")) | .id] | first // empty")"
+          if [ -n "${existing}" ]; then
+            echo "Updating existing comment ${existing}."
+            gh api --method PATCH "repos/${REPO}/issues/comments/${existing}" \
+              -F body=@import_report.md
+          else
+            echo "Creating a new report comment."
+            gh api --method POST "repos/${REPO}/issues/${PR}/comments" \
+              -F body=@import_report.md
+          fi
