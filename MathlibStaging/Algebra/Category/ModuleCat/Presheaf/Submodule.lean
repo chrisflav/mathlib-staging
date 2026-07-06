@@ -9,17 +9,7 @@ public import MathlibStaging.Init
 public import Mathlib.Algebra.Category.ModuleCat.Presheaf.Submodule
 public import Mathlib.CategoryTheory.Subfunctor.Basic
 
-/-!
-# The subfunctor associated to a submodule of a presheaf of modules
-
-Given a submodule `N` of a presheaf of modules `M`, we construct the associated
-subfunctor of the underlying type-valued presheaf of `M`.
-
-## Main definitions
-
-- `PresheafOfModules.Submodule.toSubfunctor`: the subfunctor of the underlying
-  type-valued presheaf associated to a submodule.
--/
+/-! -/
 
 @[expose] public section
 
