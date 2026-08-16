@@ -7,3 +7,4 @@ import MathlibStaging.Linter.Staging
 import MathlibStaging.Meta.Overrides
 import MathlibStaging.Meta.Upstreamed
 import MathlibStaging.Meta.UpstreamedExt
+import MathlibStaging.Tactic.GeneralizeDecl
